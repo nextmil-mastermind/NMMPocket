@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"nmmpocket/lib"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -18,7 +19,10 @@ func main() {
 			log.Fatal("Error loading .env file")
 		}
 	}
+	lib.InitDB()
 	app := pocketbase.New()
+
+	app.Cron().MustAdd("check_invoice", "0 0 * * *", func() { lib.CheckInvoice(app) })
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
