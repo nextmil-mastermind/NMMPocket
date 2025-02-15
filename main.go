@@ -25,7 +25,7 @@ func main() {
 	lib.InitDB()
 	app := pocketbase.New()
 
-	app.Cron().MustAdd("check_invoice", "0 0 * * *", func() { lib.CheckInvoice(app) })
+	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		lib.RegisterStripeWebhook(se.Router, app)

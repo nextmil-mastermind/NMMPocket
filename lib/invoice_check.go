@@ -66,7 +66,6 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 	for _, invoice := range res {
 		if invoice.DaysRemaining != 0 && invoice.Reminders {
 			message := sendReminderEmail(invoice, templates[invoice.DaysRemaining])
-			log.Default().Println(message)
 			err := app.NewMailClient().Send(message)
 			if err != nil {
 				log.Default().Println(err)

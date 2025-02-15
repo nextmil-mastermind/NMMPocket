@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
@@ -26,14 +25,14 @@ func RegisterStripeWebhook(sr *router.Router[*core.RequestEvent], app *pocketbas
 		switch event.Type {
 		case "payment_intent.succeeded":
 			// Handle successful payment
-			if processIntentSucceded(event, app.DB()) {
+			if processIntentSucceded(event, app) {
 				return e.JSON(http.StatusOK, map[string]string{"status": "success"})
 			} else {
 				return e.JSON(http.StatusOK, map[string]string{"status": "failed"})
 			}
 		case "checkout.session.completed":
 			// Handle successful checkout
-			if processIntentSucceded(event, app.DB()) {
+			if processIntentSucceded(event, app) {
 				return e.JSON(http.StatusOK, map[string]string{"status": "success"})
 			} else {
 				return e.JSON(http.StatusOK, map[string]string{"status": "failed"})
@@ -44,7 +43,7 @@ func RegisterStripeWebhook(sr *router.Router[*core.RequestEvent], app *pocketbas
 	})
 }
 
-func processIntentSucceded(event *stripe.Event, db dbx.Builder) bool {
+func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool {
 	intent := event.Data.Object
 	//check is metadata is present and contains a type field
 	if intent["metadata"] == nil {
@@ -55,22 +54,34 @@ func processIntentSucceded(event *stripe.Event, db dbx.Builder) bool {
 		return false
 	}
 	if metadata["type"] == "invoice" {
-		invoiceResponseProcess(intent, db)
+		invoiceResponseProcess(intent, app)
 	}
 	return true
 }
 
-func invoiceResponseProcess(data map[string]interface{}, db dbx.Builder) error {
+func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketBase) error {
 	var invoice Invoice
-	db.Select("*").From("invoices").Where(dbx.NewExp("session = {:session}", dbx.Params{"session": data["id"]})).One(&invoice)
-	if invoice.ID == "" {
-		return fmt.Errorf("invoice not found")
-	}
-	_, err := db.Update("invoices", dbx.Params{"paid": true}, dbx.NewExp("id = {:id}", dbx.Params{"id": invoice.ID})).Execute()
+	record, err := app.FindFirstRecordByData("invoices", "session", data["id"].(string))
 	if err != nil {
-		return fmt.Errorf("failed to update invoice: %v", err)
+		return fmt.Errorf("failed to find invoice: %v", err)
 	}
-	params := dbx.Params{"message": invoice.InvoiceName + " has been paid by " + invoice.Name, "title": "Invoice", "color": "success", "url": "https://dashboard.stripe.com/payments/" + data["id"].(string)}
-	db.Insert("admin_notifications", params).Execute()
+	record.Set("paid", true)
+	err = app.Save(record)
+	if err != nil {
+		return fmt.Errorf("failed to save invoice: %v", err)
+	}
+	collection, err := app.FindCollectionByNameOrId("admin_notifications")
+	if err != nil {
+		return fmt.Errorf("failed to find collection: %v", err)
+	}
+	notify := core.NewRecord(collection)
+	notify.Set("message", invoice.InvoiceName+" has been paid by "+invoice.Name)
+	notify.Set("title", "Invoice")
+	notify.Set("color", "success")
+	notify.Set("url", "https://dashboard.stripe.com/payments/"+data["id"].(string))
+	err = app.Save(notify)
+	if err != nil {
+		return fmt.Errorf("failed to save notification: %v", err)
+	}
 	return nil
 }

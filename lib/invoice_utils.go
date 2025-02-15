@@ -3,7 +3,6 @@ package lib
 import (
 	"fmt"
 
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/customer"
@@ -55,13 +54,15 @@ func createStripeCharge(invoice Invoice, app *pocketbase.PocketBase) (bool, erro
 	if err != nil {
 		return false, err
 	}
-
-	_, err = app.DB().Update("invoices", dbx.Params{"session": pi.ID}, dbx.NewExp("id = {:id}", dbx.Params{"id": invoice.ID})).Execute()
-
+	record, err := app.FindRecordById("invoices", invoice.ID)
 	if err != nil {
 		return false, err
 	}
-
+	record.Set("session", pi.ID)
+	err = app.Save(record)
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 
 }
