@@ -64,15 +64,15 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 	}
 	templates := getEmailTemplates(app.DB())
 	for _, invoice := range res {
-		if invoice.DaysRemaining != 0 && invoice.Reminders {
-			message := sendReminderEmail(invoice, templates[invoice.DaysRemaining])
-			err := app.NewMailClient().Send(message)
+		if invoice.InvoiceType == "auto" && invoice.DaysRemaining == 0 {
+			// Auto pay invoice
+			_, err := createStripeCharge(invoice, app)
 			if err != nil {
 				log.Default().Println(err)
 			}
-		} else if invoice.InvoiceType == "auto" {
-			// Auto pay invoice
-			_, err := createStripeCharge(invoice, app)
+		} else if invoice.Reminders {
+			message := sendReminderEmail(invoice, templates[invoice.DaysRemaining])
+			err := app.NewMailClient().Send(message)
 			if err != nil {
 				log.Default().Println(err)
 			}

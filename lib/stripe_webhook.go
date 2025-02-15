@@ -82,7 +82,7 @@ func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketB
 	notify := core.NewRecord(collection)
 	notify.Set("message", invoice.InvoiceName+" has been paid by "+invoice.Name)
 	notify.Set("title", "Invoice")
-	notify.Set("color", "success")
+	notify.Set("color", "green")
 	notify.Set("url", "https://dashboard.stripe.com/payments/"+data["id"].(string))
 	err = app.Save(notify)
 	if err != nil {
