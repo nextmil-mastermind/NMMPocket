@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/pocketbase/pocketbase"
@@ -54,7 +55,11 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 		return false
 	}
 	if metadata["type"] == "invoice" {
-		invoiceResponseProcess(intent, app)
+		err := invoiceResponseProcess(intent, app)
+		if err != nil {
+			log.Default().Println(err)
+			return false
+		}
 	}
 	return true
 }
