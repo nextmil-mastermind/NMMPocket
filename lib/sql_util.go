@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+
+	_ "github.com/lib/pq" // Register the Postgres driver
 )
 
 // Global variable for the DB connection.

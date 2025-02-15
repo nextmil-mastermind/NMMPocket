@@ -7,6 +7,8 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/stripe/stripe-go/v81"
 )
 
 func main() {
@@ -19,10 +21,16 @@ func main() {
 			log.Fatal("Error loading .env file")
 		}
 	}
+	stripe.Key = os.Getenv("STRIPE")
 	lib.InitDB()
 	app := pocketbase.New()
 
 	app.Cron().MustAdd("check_invoice", "0 0 * * *", func() { lib.CheckInvoice(app) })
+
+	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
+		lib.RegisterStripeWebhook(se.Router, app)
+		return se.Next()
+	})
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
