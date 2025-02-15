@@ -69,7 +69,7 @@ func createStripeCharge(invoice Invoice, app *pocketbase.PocketBase) (bool, erro
 func grab_card(email string) (SavedCard, error) {
 	var card []SavedCard
 	// get card from db
-	res, err := pgDB.Query("SELECT * FROM saved_cards WHERE email = $1", email)
+	res, err := pgDB.Query("SELECT * FROM stored_cards WHERE email = $1", email)
 	if err != nil {
 		return SavedCard{}, err
 	}
@@ -77,6 +77,9 @@ func grab_card(email string) (SavedCard, error) {
 	card, err = rowsToCard(res)
 	if err != nil {
 		return SavedCard{}, err
+	}
+	if len(card) == 0 {
+		return SavedCard{}, fmt.Errorf("no card found for email %q", email)
 	}
 	return card[0], nil
 

@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/pocketbase/dbx"
@@ -42,13 +43,34 @@ func RegisterStripeWebhook(sr *router.Router[*core.RequestEvent], app *pocketbas
 		}
 	})
 }
+
 func processIntentSucceded(event *stripe.Event, db dbx.Builder) bool {
-	var invoice Invoice
 	intent := event.Data.Object
-	db.Select("*").From("invoices").Where(dbx.NewExp("session = {:session}", dbx.Params{"session": intent["id"]})).One(&invoice)
-	if invoice.ID == "" {
+	//check is metadata is present and contains a type field
+	if intent["metadata"] == nil {
 		return false
 	}
+	metadata := intent["metadata"].(map[string]interface{})
+	if metadata["type"] == nil {
+		return false
+	}
+	if metadata["type"] == "invoice" {
+		invoiceResponseProcess(intent, db)
+	}
+	return true
+}
+
+func invoiceResponseProcess(data map[string]interface{}, db dbx.Builder) error {
+	var invoice Invoice
+	db.Select("*").From("invoices").Where(dbx.NewExp("session = {:session}", dbx.Params{"session": data["id"]})).One(&invoice)
+	if invoice.ID == "" {
+		return fmt.Errorf("invoice not found")
+	}
 	_, err := db.Update("invoices", dbx.Params{"paid": true}, dbx.NewExp("id = {:id}", dbx.Params{"id": invoice.ID})).Execute()
-	return err == nil
+	if err != nil {
+		return fmt.Errorf("failed to update invoice: %v", err)
+	}
+	params := dbx.Params{"message": invoice.InvoiceName + " has been paid by " + invoice.Name, "title": "Invoice", "color": "success", "url": "https://dashboard.stripe.com/payments/" + data["id"].(string)}
+	db.Insert("admin_notifications", params).Execute()
+	return nil
 }
