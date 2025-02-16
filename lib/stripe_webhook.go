@@ -65,7 +65,6 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 }
 
 func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketBase) error {
-	var invoice Invoice
 	record, err := app.FindFirstRecordByData("invoices", "session", data["id"].(string))
 	if err != nil {
 		return fmt.Errorf("failed to find invoice: %v", err)
@@ -80,7 +79,7 @@ func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketB
 		return fmt.Errorf("failed to find collection: %v", err)
 	}
 	notify := core.NewRecord(collection)
-	notify.Set("message", invoice.InvoiceName+" has been paid by "+invoice.Name)
+	notify.Set("message", record.GetString("invoicename")+" has been paid by "+record.GetString("name"))
 	notify.Set("title", "Invoice")
 	notify.Set("color", "green")
 	notify.Set("url", "https://dashboard.stripe.com/payments/"+data["id"].(string))
