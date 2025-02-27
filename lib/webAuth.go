@@ -16,12 +16,12 @@ import (
 )
 
 type User struct {
-	Id                      string `db:"id" json:"id"`
-	Username                string `db:"email" json:"username"`
-	Name                    string `db:"username" json:"name"`
-	WebAuthnIdB64           string `db:"webauthn_id_b64" json:"webauthn_id_b64"`
-	WebAuthnCredentialsJSON string `db:"webauthn_credentials" json:"webauthn_credentials"`
-	CredentialsListPB       string `db:"credentials_list" json:"credentials_list"`
+	Id                      string  `db:"id" json:"id"`
+	Username                string  `db:"email" json:"username"`
+	Name                    string  `db:"username" json:"name"`
+	WebAuthnIdB64           string  `db:"webauthn_id_b64" json:"webauthn_id_b64"`
+	WebAuthnCredentialsJSON *string `db:"webauthn_credentials" json:"webauthn_credentials"`
+	CredentialsListPB       *string `db:"credentials_list" json:"credentials_list"`
 }
 
 const (
@@ -77,10 +77,11 @@ func (u User) WebAuthnIcon() string {
 // WebAuthnCredentials provides the list of Credential objects owned by the user.
 func (user User) WebAuthnCredentials() []webauthn.Credential {
 	var credentials []webauthn.Credential
-	if user.WebAuthnCredentialsJSON == "" {
+	if user.WebAuthnCredentialsJSON == nil && *user.WebAuthnCredentialsJSON == "" {
 		return credentials
 	}
-	err := json.Unmarshal([]byte(user.WebAuthnCredentialsJSON), &credentials)
+	err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
+	fmt.Printf("credentials: %v\n", credentials)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
 		return []webauthn.Credential{}
@@ -89,11 +90,11 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 }
 
 func (user User) CredentialsListMap() map[string]any {
-	if user.CredentialsListPB == "" {
+	if user.CredentialsListPB == nil && *user.CredentialsListPB == "" {
 		return make(map[string]any)
 	}
 	var credentials map[string]any
-	err := json.Unmarshal([]byte(user.CredentialsListPB), &credentials)
+	err := json.Unmarshal([]byte(*user.CredentialsListPB), &credentials)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
 		return make(map[string]any)
@@ -104,7 +105,7 @@ func FindUser(app *pocketbase.PocketBase, email string, collection string) (*Use
 	user := User{}
 	err := app.DB().
 		NewQuery(fmt.Sprintf(
-			"SELECT id, email, username, %s, COALESCE(%s,''), COALESCE(%s,'') FROM %s WHERE email={:email}",
+			"SELECT id, email, username, %s, %s,%s FROM %s WHERE email={:email}",
 			"webauthn_id_b64", "webauthn_credentials", "credentials_list", collection)).
 		Bind(dbx.Params{"email": email}).
 		One(&user)
@@ -154,8 +155,8 @@ func (user User) SendAuthTokenResponse(collection string, app *pocketbase.Pocket
 func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection string, newCredential webauthn.Credential, device_name string) error {
 	var credentials []webauthn.Credential
 
-	if user.WebAuthnCredentialsJSON != "" && user.WebAuthnCredentialsJSON != "\"\"" {
-		err := json.Unmarshal([]byte(user.WebAuthnCredentialsJSON), &credentials)
+	if user.WebAuthnCredentialsJSON != nil && *user.WebAuthnCredentialsJSON != "" {
+		err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal existing credentials: %w", err)
 		}
@@ -173,14 +174,16 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
-	user.CredentialsListPB = string(credentialsListJSON)
+	credentialsListStr := string(credentialsListJSON)
+	user.CredentialsListPB = &credentialsListStr
 
 	// Marshal back to JSON
 	credentialsJSON, err := json.Marshal(credentials)
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
-	user.WebAuthnCredentialsJSON = string(credentialsJSON)
+	credentialsStr := string(credentialsJSON)
+	user.WebAuthnCredentialsJSON = &credentialsStr
 
 	// Update the record in the database
 	authRecord, err := app.FindFirstRecordByData(collection, "email", user.Username)
@@ -196,8 +199,8 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection string, credential_id string) error {
 	var credentials []webauthn.Credential
 
-	if user.WebAuthnCredentialsJSON != "" && user.WebAuthnCredentialsJSON != "\"\"" {
-		err := json.Unmarshal([]byte(user.WebAuthnCredentialsJSON), &credentials)
+	if user.WebAuthnCredentialsJSON != nil && *user.WebAuthnCredentialsJSON != "" {
+		err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal existing credentials: %w", err)
 		}
@@ -217,7 +220,8 @@ func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
-	user.WebAuthnCredentialsJSON = string(credentialsJSON)
+	credentialsStr := string(credentialsJSON)
+	user.WebAuthnCredentialsJSON = &credentialsStr
 	// Update the record in the database
 	authRecord, err := app.FindFirstRecordByData(collection, "email", user.Username)
 	if err != nil {
@@ -232,7 +236,8 @@ func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
-	user.CredentialsListPB = string(credentialsListJSON)
+	credentialsListStr := string(credentialsListJSON)
+	user.CredentialsListPB = &credentialsListStr
 	authRecord.Set("credentials_list", user.CredentialsListPB)
 
 	authRecord.Set(WEBAUTHN_CREDENTIALS_FIELDNAME, user.WebAuthnCredentialsJSON)
