@@ -18,7 +18,7 @@ import (
 type User struct {
 	Id                      string `db:"id" json:"id"`
 	Username                string `db:"email" json:"username"`
-	Name                    string `db:"name" json:"name"`
+	Name                    string `db:"username" json:"name"`
 	WebAuthnIdB64           string `db:"webauthn_id_b64" json:"webauthn_id_b64"`
 	WebAuthnCredentialsJSON string `db:"webauthn_credentials" json:"webauthn_credentials"`
 	CredentialsListPB       string `db:"credentials_list" json:"credentials_list"`
@@ -89,23 +89,22 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 }
 
 func (user User) CredentialsListMap() map[string]any {
-	var credentials map[string]any
 	if user.CredentialsListPB == "" {
-		return credentials
+		return make(map[string]any)
 	}
+	var credentials map[string]any
 	err := json.Unmarshal([]byte(user.CredentialsListPB), &credentials)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
-		return map[string]any{}
+		return make(map[string]any)
 	}
 	return credentials
 }
 func FindUser(app *pocketbase.PocketBase, email string, collection string) (*User, error) {
-	// Find user
 	user := User{}
 	err := app.DB().
 		NewQuery(fmt.Sprintf(
-			"SELECT id, email, name, %s, %s, %s FROM %s WHERE email={:email}",
+			"SELECT id, email, username, %s, COALESCE(%s,''), COALESCE(%s,'') FROM %s WHERE email={:email}",
 			"webauthn_id_b64", "webauthn_credentials", "credentials_list", collection)).
 		Bind(dbx.Params{"email": email}).
 		One(&user)
