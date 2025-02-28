@@ -93,9 +93,7 @@ func (user User) CredentialsListMap() map[string]string {
 		return make(map[string]string)
 	}
 	var credentials map[string]string
-	err := json.Unmarshal([]byte(*user.CredentialsListPB), &credentials)
-	if err != nil {
-		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
+	if err := json.Unmarshal([]byte(*user.CredentialsListPB), &credentials); err != nil || credentials == nil {
 		return make(map[string]string)
 	}
 	return credentials
