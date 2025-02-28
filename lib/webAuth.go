@@ -106,9 +106,22 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 	if user.WebAuthnCredentialsJSON == nil || *user.WebAuthnCredentialsJSON == "" {
 		return credentials
 	}
+	// First, try unmarshaling directly into the slice.
 	err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
+	if err == nil {
+		return credentials
+	}
+
+	// If that fails, try unwrapping a double-encoded JSON:
+	var inner string
+	err = json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &inner)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
+		return []webauthn.Credential{}
+	}
+	err = json.Unmarshal([]byte(inner), &credentials)
+	if err != nil {
+		fmt.Printf("error while double-unmarshalling credentials from db: %v\n", err)
 		return []webauthn.Credential{}
 	}
 	return credentials
