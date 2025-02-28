@@ -179,42 +179,39 @@ func (user User) SendAuthTokenResponse(collection string, app *pocketbase.Pocket
 }
 
 func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection string, newCredential webauthn.Credential, device_name string) error {
-	var credentials []webauthn.Credential
-
-	if user.WebAuthnCredentialsJSON != nil && *user.WebAuthnCredentialsJSON != "" {
-		err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal existing credentials: %w", err)
-		}
-	}
+	// Use the shared decoding logic to get the current credentials,
+	// which handles both direct and double-encoded JSON.
+	credentials := user.WebAuthnCredentials() // returns []webauthn.Credential
 
 	// Append the new credential
 	credentials = append(credentials, newCredential)
 
-	//Add to credentials list
+	// Update the credentials list for additional UI/metadata tracking.
 	if user.CredentialsListPB == nil {
 		emptyList := CredentialPBList{}
 		user.CredentialsListPB = &emptyList
 	}
-	updatedList := append(*user.CredentialsListPB, CredentialPB{DeviceName: device_name, DeviceID: IDString(newCredential)})
+	updatedList := append(*user.CredentialsListPB, CredentialPB{
+		DeviceName: device_name,
+		DeviceID:   IDString(newCredential),
+	})
 	user.CredentialsListPB = &updatedList
 
-	credentialsListJson, err := json.Marshal(user.CredentialsListPB)
+	credentialsListJSON, err := json.Marshal(user.CredentialsListPB)
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials list: %w", err)
 	}
-	credentialsListStr := string(credentialsListJson)
+	credentialsListStr := string(credentialsListJSON)
 
-	// Marshal back to JSON
+	// Marshal credentials back to JSON.
 	credentialsJSON, err := json.Marshal(credentials)
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
-
 	credentialsStr := string(credentialsJSON)
 	user.WebAuthnCredentialsJSON = &credentialsStr
 
-	// Update the record in the database
+	// Update the record in the database.
 	authRecord, err := app.FindFirstRecordByData(collection, "email", user.Username)
 	if err != nil {
 		return apis.NewNotFoundError("User not found.", err)
