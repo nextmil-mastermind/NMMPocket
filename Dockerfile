@@ -16,7 +16,6 @@ RUN apk add --no-cache \
     unzip \
     ca-certificates
 
-# download https://drive.google.com/file/d/1TgFbkVaHUqB3OvBVXB4ZMBNPN_Et-WHj/view?usp=sharing
 # Create a directory for PocketBase
 RUN mkdir -p /pb
 
