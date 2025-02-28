@@ -223,16 +223,7 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 }
 
 func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection string, credential_id string) error {
-	var credentials []webauthn.Credential
-
-	if user.WebAuthnCredentialsJSON != nil && *user.WebAuthnCredentialsJSON != "" {
-		err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal existing credentials: %w", err)
-		}
-	} else {
-		return fmt.Errorf("no credentials found")
-	}
+	credentials := user.WebAuthnCredentials() // returns []webauthn.Credential
 
 	// Remove the credential with the given ID
 	for i, c := range credentials {
