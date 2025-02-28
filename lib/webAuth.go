@@ -77,7 +77,7 @@ func (u User) WebAuthnIcon() string {
 // WebAuthnCredentials provides the list of Credential objects owned by the user.
 func (user User) WebAuthnCredentials() []webauthn.Credential {
 	var credentials []webauthn.Credential
-	if user.WebAuthnCredentialsJSON == nil && *user.WebAuthnCredentialsJSON == "" {
+	if user.WebAuthnCredentialsJSON == nil || *user.WebAuthnCredentialsJSON == "" {
 		return credentials
 	}
 	err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
@@ -89,7 +89,7 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 }
 
 func (user User) CredentialsListMap() map[string]string {
-	if user.CredentialsListPB == nil && *user.CredentialsListPB == "" {
+	if user.CredentialsListPB == nil || *user.CredentialsListPB == "" {
 		return make(map[string]string)
 	}
 	var credentials map[string]string
