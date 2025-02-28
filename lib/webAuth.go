@@ -16,18 +16,23 @@ import (
 )
 
 type User struct {
-	Id                      string  `db:"id" json:"id"`
-	Username                string  `db:"email" json:"username"`
-	Name                    string  `db:"username" json:"name"`
-	WebAuthnIdB64           string  `db:"webauthn_id_b64" json:"webauthn_id_b64"`
-	WebAuthnCredentialsJSON *string `db:"webauthn_credentials" json:"webauthn_credentials"`
-	CredentialsListPB       *string `db:"credentials_list" json:"credentials_list"`
+	Id                      string          `db:"id" json:"id"`
+	Username                string          `db:"email" json:"username"`
+	Name                    string          `db:"username" json:"name"`
+	WebAuthnIdB64           string          `db:"webauthn_id_b64" json:"webauthn_id_b64"`
+	WebAuthnCredentialsJSON *string         `db:"webauthn_credentials" json:"webauthn_credentials"`
+	CredentialsListPB       *[]CredentialPB `db:"credentials_list" json:"credentials_list"`
 }
 
 const (
 	WEBAUTHN_CREDENTIALS_FIELDNAME string = "webauthn_credentials"
 	WEBAUTHN_ID_B64_FIELDNAME      string = "webauthn_id_b64"
 )
+
+type CredentialPB struct {
+	DeviceName string `json:"device_name"`
+	DeviceID   string `json:"device_id"`
+}
 
 // WebAuthnID provides the user handle of the user account. A user handle is an opaque byte sequence with a maximum
 // size of 64 bytes, and is not meant to be displayed to the user.
@@ -88,16 +93,6 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 	return credentials
 }
 
-func (user User) CredentialsListMap() map[string]string {
-	if user.CredentialsListPB == nil || *user.CredentialsListPB == "" {
-		return make(map[string]string)
-	}
-	var credentials map[string]string
-	if err := json.Unmarshal([]byte(*user.CredentialsListPB), &credentials); err != nil || credentials == nil {
-		return make(map[string]string)
-	}
-	return credentials
-}
 func FindUser(app *pocketbase.PocketBase, email string, collection string) (*User, error) {
 	user := User{}
 	err := app.DB().
@@ -162,23 +157,25 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 	// Append the new credential
 	credentials = append(credentials, newCredential)
 
-	credentialsList := user.CredentialsListMap()
-	// extract the ID from the new credential as a string
-
-	credentialsList[IDString(newCredential)] = device_name
-	// Marshal back to JSON
-	credentialsListJSON, err := json.Marshal(credentialsList)
-	if err != nil {
-		return fmt.Errorf("failed to marshal credentials: %w", err)
+	//Add to credentials list
+	if user.CredentialsListPB == nil {
+		user.CredentialsListPB = &[]CredentialPB{}
 	}
-	credentialsListStr := string(credentialsListJSON)
-	user.CredentialsListPB = &credentialsListStr
+	updatedList := append(*user.CredentialsListPB, CredentialPB{DeviceName: device_name, DeviceID: IDString(newCredential)})
+	user.CredentialsListPB = &updatedList
+
+	credentialsListJson, err := json.Marshal(user.CredentialsListPB)
+	if err != nil {
+		return fmt.Errorf("failed to marshal credentials list: %w", err)
+	}
+	credentialsListStr := string(credentialsListJson)
 
 	// Marshal back to JSON
 	credentialsJSON, err := json.Marshal(credentials)
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials: %w", err)
 	}
+
 	credentialsStr := string(credentialsJSON)
 	user.WebAuthnCredentialsJSON = &credentialsStr
 
@@ -189,7 +186,7 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 	}
 
 	authRecord.Set(WEBAUTHN_CREDENTIALS_FIELDNAME, user.WebAuthnCredentialsJSON)
-	authRecord.Set("credentials_list", user.CredentialsListPB)
+	authRecord.Set("credentials_list", credentialsListStr)
 	return app.Save(authRecord)
 }
 
@@ -225,17 +222,23 @@ func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection
 		return apis.NewNotFoundError("User not found.", err)
 	}
 
-	credentialsList := user.CredentialsListMap()
-	// extract the ID from the new credential as a string
-	delete(credentialsList, credential_id)
-	// Marshal back to JSON
-	credentialsListJSON, err := json.Marshal(credentialsList)
-	if err != nil {
-		return fmt.Errorf("failed to marshal credentials: %w", err)
+	// Remove from credentials list
+	if user.CredentialsListPB == nil {
+		user.CredentialsListPB = &[]CredentialPB{}
 	}
-	credentialsListStr := string(credentialsListJSON)
-	user.CredentialsListPB = &credentialsListStr
-	authRecord.Set("credentials_list", user.CredentialsListPB)
+	updatedList := []CredentialPB{}
+	for _, c := range *user.CredentialsListPB {
+		if c.DeviceID != credential_id {
+			updatedList = append(updatedList, c)
+		}
+	}
+	user.CredentialsListPB = &updatedList
+	credentialsListJson, err := json.Marshal(user.CredentialsListPB)
+	if err != nil {
+		return fmt.Errorf("failed to marshal credentials list: %w", err)
+	}
+	credentialsListStr := string(credentialsListJson)
+	authRecord.Set("credentials_list", credentialsListStr)
 
 	authRecord.Set(WEBAUTHN_CREDENTIALS_FIELDNAME, user.WebAuthnCredentialsJSON)
 	return app.Save(authRecord)
