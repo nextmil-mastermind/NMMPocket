@@ -43,11 +43,16 @@ func (c *CredentialPBList) Scan(src any) error {
 		*c = nil
 		return nil
 	}
-	bytes, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to type assert credentials_list to []byte")
+	var data []byte
+	switch v := src.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	default:
+		return fmt.Errorf("unsupported type %T", src)
 	}
-	return json.Unmarshal(bytes, c)
+	return json.Unmarshal(data, c)
 }
 
 // WebAuthnID provides the user handle of the user account. A user handle is an opaque byte sequence with a maximum
