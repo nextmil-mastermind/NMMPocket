@@ -34,6 +34,22 @@ type CredentialPB struct {
 	DeviceID   string `json:"device_id"`
 }
 
+// Define a new type
+type CredentialPBList []CredentialPB
+
+// Implement the sql.Scanner interface
+func (c *CredentialPBList) Scan(src any) error {
+	if src == nil {
+		*c = nil
+		return nil
+	}
+	bytes, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("failed to type assert credentials_list to []byte")
+	}
+	return json.Unmarshal(bytes, c)
+}
+
 // WebAuthnID provides the user handle of the user account. A user handle is an opaque byte sequence with a maximum
 // size of 64 bytes, and is not meant to be displayed to the user.
 //
