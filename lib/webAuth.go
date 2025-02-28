@@ -81,7 +81,6 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 		return credentials
 	}
 	err := json.Unmarshal([]byte(*user.WebAuthnCredentialsJSON), &credentials)
-	fmt.Printf("credentials: %v\n", credentials)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
 		return []webauthn.Credential{}
@@ -89,15 +88,15 @@ func (user User) WebAuthnCredentials() []webauthn.Credential {
 	return credentials
 }
 
-func (user User) CredentialsListMap() map[string]any {
+func (user User) CredentialsListMap() map[string]string {
 	if user.CredentialsListPB == nil && *user.CredentialsListPB == "" {
-		return make(map[string]any)
+		return make(map[string]string)
 	}
-	var credentials map[string]any
+	var credentials map[string]string
 	err := json.Unmarshal([]byte(*user.CredentialsListPB), &credentials)
 	if err != nil {
 		fmt.Printf("error while unmarshalling credentials from db: %v\n", err)
-		return make(map[string]any)
+		return make(map[string]string)
 	}
 	return credentials
 }
