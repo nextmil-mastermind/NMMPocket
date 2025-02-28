@@ -16,12 +16,12 @@ import (
 )
 
 type User struct {
-	Id                      string          `db:"id" json:"id"`
-	Username                string          `db:"email" json:"username"`
-	Name                    string          `db:"username" json:"name"`
-	WebAuthnIdB64           string          `db:"webauthn_id_b64" json:"webauthn_id_b64"`
-	WebAuthnCredentialsJSON *string         `db:"webauthn_credentials" json:"webauthn_credentials"`
-	CredentialsListPB       *[]CredentialPB `db:"credentials_list" json:"credentials_list"`
+	Id                      string            `db:"id" json:"id"`
+	Username                string            `db:"email" json:"username"`
+	Name                    string            `db:"username" json:"name"`
+	WebAuthnIdB64           string            `db:"webauthn_id_b64" json:"webauthn_id_b64"`
+	WebAuthnCredentialsJSON *string           `db:"webauthn_credentials" json:"webauthn_credentials"`
+	CredentialsListPB       *CredentialPBList `db:"credentials_list" json:"credentials_list"`
 }
 
 const (
@@ -175,7 +175,8 @@ func (user *User) AddWebAuthnCredential(app *pocketbase.PocketBase, collection s
 
 	//Add to credentials list
 	if user.CredentialsListPB == nil {
-		user.CredentialsListPB = &[]CredentialPB{}
+		emptyList := CredentialPBList{}
+		user.CredentialsListPB = &emptyList
 	}
 	updatedList := append(*user.CredentialsListPB, CredentialPB{DeviceName: device_name, DeviceID: IDString(newCredential)})
 	user.CredentialsListPB = &updatedList
@@ -240,7 +241,7 @@ func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection
 
 	// Remove from credentials list
 	if user.CredentialsListPB == nil {
-		user.CredentialsListPB = &[]CredentialPB{}
+		user.CredentialsListPB = new(CredentialPBList)
 	}
 	updatedList := []CredentialPB{}
 	for _, c := range *user.CredentialsListPB {
@@ -248,7 +249,8 @@ func (user User) DeleteWebAuthnCredential(app *pocketbase.PocketBase, collection
 			updatedList = append(updatedList, c)
 		}
 	}
-	user.CredentialsListPB = &updatedList
+	list := CredentialPBList(updatedList)
+	user.CredentialsListPB = &list
 	credentialsListJson, err := json.Marshal(user.CredentialsListPB)
 	if err != nil {
 		return fmt.Errorf("failed to marshal credentials list: %w", err)
