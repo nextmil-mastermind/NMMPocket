@@ -36,10 +36,12 @@ type OrderData struct {
 	FirstName      string
 	LastName       string
 	Email          string
+	EventRef       string
 	Title          string    // event title
 	Venue          string    // event venue
 	StartTime      time.Time // event start time
 	Tickets        []map[string]any
 	OrderReference string
 	Address        *string // optional
+	Total          float64
 }

@@ -3,49 +3,54 @@ package event
 import (
 	"encoding/json"
 	"math/rand"
+	"nmmpocket/emailsender"
 	"time"
 )
 
-func AddOrder(data map[string]any, amount float64) string {
-	var emailData map[string]any
+func AddOrder(data Checkout, amount float64) string {
+	var emailData emailsender.OrderData
 	var orderID = generateID(14)
 	var today = time.Now().Format("2006-01-02 15:04:05")
 	order := Order{
 		Reference:   orderID,
-		FirstName:   data["first_name"].(string),
-		LastName:    data["last_name"].(string),
-		Email:       data["email"].(string),
-		EventRef:    data["event_ref"].(string),
+		FirstName:   data.FirstName,
+		LastName:    data.LastName,
+		Email:       data.Email,
+		EventRef:    data.EventRef,
 		Total:       amount,
 		Refunded:    false,
 		CreatedAt:   today,
 		TicketCount: 0,
-		From:        data["from"].(string),
+		From:        data.From,
 		TicketUrl:   "",
 	}
-	emailData = map[string]any{
-		"email":           data["email"].(string),
-		"first_name":      data["first_name"].(string),
-		"last_name":       data["last_name"].(string),
-		"event_ref":       data["event_ref"].(string),
-		"order_reference": orderID,
-		"total":           amount,
-		"tickets":         []map[string]any{},
+	emailData = emailsender.OrderData{
+		FirstName:      data.FirstName,
+		LastName:       data.LastName,
+		Email:          data.Email,
+		EventRef:       data.EventRef,
+		Title:          "",
+		Venue:          "",
+		StartTime:      time.Now(),
+		OrderReference: orderID,
+		Address:        nil,
+		Total:          amount,
 	}
+
 	mainTicket := map[string]any{
-		"email":      data["email"].(string),
-		"first_name": data["first_name"].(string),
-		"last_name":  data["last_name"].(string),
-		"ticket_id":  data["ticket_id"].(int),
+		"email":      data.Email,
+		"first_name": data.FirstName,
+		"last_name":  data.LastName,
+		"ticket_id":  data.TicketID,
 		"main":       true,
 	}
 	var attendees = []map[string]any{}
 	attendees = append(attendees, mainTicket)
 	var peopleNum = 1
-	if hasExPeople, ok := data["HasExPeople"].(bool); ok && hasExPeople {
-		if extraPeopleStr, ok := data["ExtraPeople"].(string); ok {
+	if data.HasExPeople {
+		if data.ExtraPeople != "" {
 			var extraPeople []map[string]any
-			if err := json.Unmarshal([]byte(extraPeopleStr), &extraPeople); err == nil {
+			if err := json.Unmarshal([]byte(data.ExtraPeople), &extraPeople); err == nil {
 				attendees = append(attendees, extraPeople...)
 				peopleNum += len(extraPeople)
 			}
@@ -65,7 +70,7 @@ func AddOrder(data map[string]any, amount float64) string {
 			FirstName:   attendee["first_name"].(string),
 			LastName:    attendee["last_name"].(string),
 			Email:       attendee["email"].(string),
-			EventRef:    data["event_ref"].(string),
+			EventRef:    data.EventRef,
 			orderID:     orderID,
 			TicketID:    ticket_id,
 			IsCancelled: false,
@@ -73,7 +78,7 @@ func AddOrder(data map[string]any, amount float64) string {
 			ArrivalAt:   "",
 			CreatedAt:   today,
 		}
-		emailData["tickets"] = append(emailData["tickets"].([]map[string]any), map[string]any{
+		emailData.Tickets = append(emailData.Tickets, map[string]any{
 			"email":      attendee["email"].(string),
 			"first_name": attendee["first_name"].(string),
 			"last_name":  attendee["last_name"].(string),
@@ -83,6 +88,7 @@ func AddOrder(data map[string]any, amount float64) string {
 		})
 		InsertTicket(ticket)
 	}
+	emailsender.SendOrderEmail(emailData)
 	return orderID
 }
 func generateID(length int) string {

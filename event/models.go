@@ -33,7 +33,7 @@ type Checkout struct {
 	FirstName   string `db:"first_name"`
 	LastName    string `db:"last_name"`
 	Email       string `db:"email"`
-	HasExPeople string `db:"HasExPeople"`
+	HasExPeople bool   `db:"HasExPeople"`
 	ExtraPeople string `db:"ExtraPeople,omitempty"`
 	Phone       string `db:"phone,omitempty"`
 	OrderURL    string `db:"orderUrl,omitempty"`

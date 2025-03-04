@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	ev "nmmpocket/event"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -56,6 +57,12 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 	}
 	if metadata["type"] == "invoice" {
 		err := invoiceResponseProcess(intent, app)
+		if err != nil {
+			log.Default().Println(err)
+			return false
+		}
+	} else if metadata["type"] == "event" {
+		err := ev.EventResponseProcess(intent)
 		if err != nil {
 			log.Default().Println(err)
 			return false

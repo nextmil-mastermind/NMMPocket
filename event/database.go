@@ -2,7 +2,6 @@ package event
 
 import (
 	dab "nmmpocket/database"
-	"strconv"
 )
 
 func InsertOrder(order Order) error {
@@ -17,27 +16,6 @@ func InsertOrder(order Order) error {
 	}
 	return nil
 }
-func UpdateOrder(WhereCol string, WhereString string, WhatCols []string, order Order) error {
-	db := dab.Pg
-	whatColsString := ""
-	for i, col := range WhatCols {
-		if i == 0 {
-			whatColsString += col + " = $" + strconv.Itoa(i+1)
-		} else {
-			whatColsString += ", " + col + " = $" + strconv.Itoa(i+1)
-		}
-	}
-	statement, err := db.Prepare("UPDATE orders SET " + whatColsString + " WHERE " + WhereCol + " = \"" + WhereString + "\"")
-	if err != nil {
-		return err
-	}
-	_, err = statement.Exec(order.Reference, order.FirstName, order.LastName, order.Email, order.EventRef, order.Total, order.Refunded, order.CreatedAt, order.TicketCount)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func InsertTicket(ticket Ticket) error {
 	db := dab.Pg
 	statement, err := db.Prepare("INSERT INTO tickets (reference, first_name, last_name, email, event_ref, order_id, ticket_id, is_cancelled, has_arrived, arrival, date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
@@ -49,4 +27,19 @@ func InsertTicket(ticket Ticket) error {
 		return err
 	}
 	return nil
+}
+
+func selectCheckout(sessionID string) (Checkout, error) {
+	db := dab.Pg
+	statement, err := db.Prepare("SELECT * FROM checkout WHERE session_id = $1")
+	if err != nil {
+		return Checkout{}, err
+	}
+	row := statement.QueryRow(sessionID)
+	var checkout Checkout
+	err = row.Scan(&checkout.SessionID, &checkout.FirstName, &checkout.LastName, &checkout.Email, &checkout.HasExPeople, &checkout.ExtraPeople, &checkout.Phone, &checkout.OrderURL, &checkout.Processed, &checkout.From, &checkout.Type, &checkout.EventRef, &checkout.TicketID, &checkout.Indentifier, &checkout.DateAdded)
+	if err != nil {
+		return Checkout{}, err
+	}
+	return checkout, nil
 }
