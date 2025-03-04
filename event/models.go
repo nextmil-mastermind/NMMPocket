@@ -1,6 +1,9 @@
 package event
 
-import "github.com/pocketbase/pocketbase"
+import (
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
+)
 
 var PbApp *pocketbase.PocketBase
 
@@ -57,6 +60,7 @@ type Event struct {
 	StartTime     string           `db:"start_time" json:"start_time"`
 	EndTime       string           `db:"end_time" json:"end_time"`
 	Venue         string           `db:"venue" json:"venue"`
+	Address       string           `db:"address" json:"address"`
 	Paid          bool             `db:"paid" json:"paid"`
 	ClientRefID   string           `db:"client_reference_id" json:"client_reference_id"`
 	Type          string           `db:"type" json:"type"`
@@ -69,4 +73,35 @@ type Event struct {
 	Billing       bool             `db:"billing" json:"billing"`
 	Member        float64          `db:"member" json:"member"`
 	GTAG          string           `db:"gtag" json:"gtag"`
+}
+
+// FromRecord converts a Record to an Event.
+// It populates the Event fields based on the Record's data.
+// This method is useful for converting database records into Event objects.
+// It returns an error if any field conversion fails.
+func (e *Event) FromRecord(record *core.Record) error {
+	e.Reference = record.GetString("reference")
+	e.Title = record.GetString("title")
+	e.URL = record.GetString("url")
+	e.StartTime = record.GetString("start_time")
+	e.EndTime = record.GetString("end_time")
+	e.Venue = record.GetString("venue")
+	e.Paid = record.GetBool("paid")
+	e.ClientRefID = record.GetString("client_reference_id")
+	e.Type = record.GetString("type")
+	e.Languange = record.GetString("languange")
+	e.ResponseFound = record.GetString("response_found")
+	e.ResponseWait = record.GetString("response_wait")
+	e.Duplicate = record.GetString("duplicate")
+	e.Address = record.GetString("address")
+	if err := record.UnmarshalJSONField("ticket_types", &e.TicketTypes); err != nil {
+		return err
+	}
+	if err := record.UnmarshalJSONField("coupons", &e.Coupons); err != nil {
+		return err
+	}
+	e.Billing = record.GetBool("billing")
+	e.Member = record.GetFloat("member")
+	e.GTAG = record.GetString("gtag")
+	return nil
 }

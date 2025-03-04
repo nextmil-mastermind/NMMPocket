@@ -16,5 +16,4 @@ func EventResponseProcess(intent map[string]any) error {
 	}
 	AddOrder(checkout, float64(intent["amount"].(int64))/100)
 	return nil
-
 }

@@ -91,6 +91,17 @@ func AddOrder(data Checkout, amount float64) (string, error) {
 		})
 		InsertTicket(ticket)
 	}
+	// get event
+	event, err := getEvent(data.EventRef)
+	if err != nil {
+		return "", err
+	}
+	emailData.Title = event.Title
+	emailData.Venue = event.Venue
+	emailData.StartTime, _ = time.Parse("2006-01-02 15:04:05", event.StartTime)
+	emailData.Address = &event.Address
+	emailData.Total = amount
+	// send email
 	err = emailsender.SendOrderEmail(emailData)
 	if err != nil {
 		return "", err
@@ -106,6 +117,15 @@ func generateID(length int) string {
 	return string(b)
 }
 
-func getEvent(eventRef string) (map[string]any, error) {
-	return map[string]any{}, nil
+func getEvent(eventRef string) (Event, error) {
+	var event Event
+	record, err := PbApp.FindFirstRecordByData("events", "reference", eventRef)
+	if err != nil {
+		return event, err
+	}
+	err = event.FromRecord(record)
+	if err != nil {
+		return event, err
+	}
+	return event, nil
 }
