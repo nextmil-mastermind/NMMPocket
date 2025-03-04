@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func AddOrder(data Checkout, amount float64) string {
+func AddOrder(data Checkout, amount float64) (string, error) {
 	var emailData emailsender.OrderData
 	var orderID = generateID(14)
 	var today = time.Now().Format("2006-01-02 15:04:05")
@@ -57,7 +57,10 @@ func AddOrder(data Checkout, amount float64) string {
 		}
 	}
 	order.TicketCount = peopleNum
-	InsertOrder(order)
+	err := InsertOrder(order)
+	if err != nil {
+		return "", err
+	}
 
 	for i, attendee := range attendees {
 		ticket_id := 0
@@ -88,8 +91,11 @@ func AddOrder(data Checkout, amount float64) string {
 		})
 		InsertTicket(ticket)
 	}
-	emailsender.SendOrderEmail(emailData)
-	return orderID
+	err = emailsender.SendOrderEmail(emailData)
+	if err != nil {
+		return "", err
+	}
+	return orderID, nil
 }
 func generateID(length int) string {
 	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
@@ -98,4 +104,8 @@ func generateID(length int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func getEvent(eventRef string) (map[string]any, error) {
+	return map[string]any{}, nil
 }

@@ -1,5 +1,9 @@
 package event
 
+import "github.com/pocketbase/pocketbase"
+
+var PbApp *pocketbase.PocketBase
+
 type Order struct {
 	Reference   string  `db:"reference"`
 	FirstName   string  `db:"first_name"`
@@ -44,4 +48,25 @@ type Checkout struct {
 	TicketID    int    `db:"ticket_id"`
 	Indentifier string `db:"identifier,omitempty"`
 	DateAdded   string `db:"date_added"`
+}
+
+type Event struct {
+	Reference     string           `db:"reference" json:"reference"`
+	Title         string           `db:"title" json:"title"`
+	URL           string           `db:"url" json:"url"`
+	StartTime     string           `db:"start_time" json:"start_time"`
+	EndTime       string           `db:"end_time" json:"end_time"`
+	Venue         string           `db:"venue" json:"venue"`
+	Paid          bool             `db:"paid" json:"paid"`
+	ClientRefID   string           `db:"client_reference_id" json:"client_reference_id"`
+	Type          string           `db:"type" json:"type"`
+	Languange     string           `db:"languange" json:"languange"`
+	ResponseFound string           `db:"response_found" json:"response_found"`
+	ResponseWait  string           `db:"response_wait" json:"response_wait"`
+	Duplicate     string           `db:"duplicate" json:"duplicate"`
+	TicketTypes   []map[string]any `db:"ticket_types" json:"ticket_types"`
+	Coupons       []map[string]any `db:"coupons" json:"coupons"`
+	Billing       bool             `db:"billing" json:"billing"`
+	Member        float64          `db:"member" json:"member"`
+	GTAG          string           `db:"gtag" json:"gtag"`
 }

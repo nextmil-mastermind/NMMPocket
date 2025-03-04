@@ -5,6 +5,7 @@ import (
 	"log"
 	"nmmpocket/database"
 	"nmmpocket/emailsender"
+	"nmmpocket/event"
 	"nmmpocket/lib"
 	"nmmpocket/passkeys"
 	"os"
@@ -51,7 +52,7 @@ func main() {
 	database.InitDB()
 	emailsender.LoadEmailTemplate()
 	app := pocketbase.New()
-
+	event.PbApp = app
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
