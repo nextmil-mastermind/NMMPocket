@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	db "nmmpocket/database"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/stripe/stripe-go/v81"
@@ -70,12 +71,12 @@ func createStripeCharge(invoice Invoice, app *pocketbase.PocketBase) (bool, erro
 func grab_card(email string) (SavedCard, error) {
 	var card []SavedCard
 	// get card from db
-	res, err := pgDB.Query("SELECT * FROM stored_cards WHERE email = $1", email)
+	res, err := db.Pg.Query("SELECT * FROM stored_cards WHERE email = $1", email)
 	if err != nil {
 		return SavedCard{}, err
 	}
 	defer res.Close()
-	card, err = rowsToCard(res)
+	card, err = RowsToCard(res)
 	if err != nil {
 		return SavedCard{}, err
 	}

@@ -3,4 +3,8 @@ go 1.23.6
 use (
 	.
 	./lib
+	./event
+	./database
+	./passkeys
+	./emailsender
 )

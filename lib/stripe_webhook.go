@@ -50,7 +50,7 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 	if intent["metadata"] == nil {
 		return false
 	}
-	metadata := intent["metadata"].(map[string]interface{})
+	metadata := intent["metadata"].(map[string]any)
 	if metadata["type"] == nil {
 		return false
 	}
@@ -64,7 +64,7 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 	return true
 }
 
-func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketBase) error {
+func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) error {
 	record, err := app.FindFirstRecordByData("invoices", "session", data["id"].(string))
 	if err != nil {
 		return fmt.Errorf("failed to find invoice: %v", err)

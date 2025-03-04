@@ -1,12 +1,11 @@
-module nmmpocket
+module nmmpocket/passkeys
 
 go 1.23.6
 
 require (
 	github.com/go-webauthn/webauthn v0.12.1
-	github.com/joho/godotenv v1.5.1
+	github.com/pocketbase/dbx v1.11.0
 	github.com/pocketbase/pocketbase v0.25.8
-	github.com/stripe/stripe-go/v81 v81.4.0
 )
 
 require (
@@ -45,12 +44,10 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/lib/pq v1.10.9
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
-	github.com/pocketbase/dbx v1.11.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect

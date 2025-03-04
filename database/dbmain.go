@@ -1,4 +1,4 @@
-package lib
+package database
 
 import (
 	"database/sql"
@@ -13,7 +13,7 @@ import (
 )
 
 // Global variable for the DB connection.
-var pgDB *sql.DB
+var Pg *sql.DB
 
 // InitDB initializes the database connection using the pgurl environment variable.
 func InitDB() {
@@ -38,11 +38,11 @@ func InitDB() {
 
 	// Build a DSN for the pq driver.
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require", user, password, host, port, dbName)
-	pgDB, err = sql.Open("postgres", dsn)
+	Pg, err = sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("Failed to open DB: %v", err)
 	}
-	if err = pgDB.Ping(); err != nil {
+	if err = Pg.Ping(); err != nil {
 		log.Fatalf("Failed to ping DB: %v", err)
 	}
 	log.Println("Connected to Postgres successfully")
@@ -100,18 +100,4 @@ func rowsToMap(rows *sql.Rows) ([]map[string]interface{}, error) {
 		results = append(results, rowMap)
 	}
 	return results, nil
-}
-
-func rowsToCard(rows *sql.Rows) ([]SavedCard, error) {
-	var card []SavedCard
-
-	for rows.Next() {
-		var c SavedCard
-		err := rows.Scan(&c.ID, &c.Email, &c.PaymentID, &c.Last_4)
-		if err != nil {
-			return nil, err
-		}
-		card = append(card, c)
-	}
-	return card, nil
 }

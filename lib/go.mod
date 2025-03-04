@@ -3,18 +3,13 @@ module nmmpocket/lib
 go 1.23.6
 
 require (
-	github.com/lib/pq v1.10.9
 	github.com/pocketbase/dbx v1.11.0
 	github.com/pocketbase/pocketbase v0.25.8
 	github.com/stripe/stripe-go/v81 v81.4.0
 )
 
 require (
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-webauthn/x v0.1.18 // indirect
-	github.com/google/go-tpm v0.9.3 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 // indirect
 )
 
@@ -46,7 +41,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/ganigeorgiev/fexpr v0.4.1 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
-	github.com/go-webauthn/webauthn v0.12.1
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
