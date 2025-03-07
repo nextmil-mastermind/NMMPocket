@@ -116,16 +116,3 @@ func generateID(length int) string {
 	}
 	return string(b)
 }
-
-func getEvent(eventRef string) (Event, error) {
-	var event Event
-	record, err := PbApp.FindFirstRecordByData("events", "reference", eventRef)
-	if err != nil {
-		return event, err
-	}
-	err = event.FromRecord(record)
-	if err != nil {
-		return event, err
-	}
-	return event, nil
-}

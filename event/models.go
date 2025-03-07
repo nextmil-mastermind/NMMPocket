@@ -1,11 +1,8 @@
 package event
 
 import (
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
-
-var PbApp *pocketbase.PocketBase
 
 type Order struct {
 	Reference   string  `db:"reference"`
@@ -104,4 +101,43 @@ func (e *Event) FromRecord(record *core.Record) error {
 	e.Member = record.GetFloat("member")
 	e.GTAG = record.GetString("gtag")
 	return nil
+}
+
+// PaymentData represents the data required for processing a payment.
+type PaymentData struct {
+	Attendees     []Attendee `json:"attendees"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	Email         string     `json:"email"`
+	Event         string     `json:"event"`
+	Phone         string     `json:"phone"`
+	From          string     `json:"from"`
+	Update        bool       `json:"update"`
+	Intent        string     `json:"intent"`
+	Coupon        string     `json:"coupon"`
+	GoogleCaptcha string     `json:"googleCaptcha"`
+}
+
+type Attendee struct {
+	TicketType int `json:"ticket_type"`
+}
+
+type TicketType struct {
+	Price float64
+}
+
+type Coupon struct {
+	Type       string  // "free", "percent", "fixed", "different_ticket"
+	Amount     float64 // For "percent" or "fixed"
+	Ticket     int     // For "different_ticket"
+	Expiration string  // Time in RFC3339 format
+}
+
+type OrderResponse struct {
+	Success      string  `json:"success,omitempty"`
+	Error        string  `json:"error,omitempty"`
+	OrderID      string  `json:"order_id,omitempty"`
+	ClientSecret string  `json:"clientSecret,omitempty"`
+	Due          float64 `json:"due,omitempty"`
+	Message      string  `json:"message,omitempty"`
 }
