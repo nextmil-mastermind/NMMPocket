@@ -5,7 +5,7 @@ go 1.23.6
 require (
 	github.com/go-webauthn/webauthn v0.12.1
 	github.com/joho/godotenv v1.5.1
-	github.com/pocketbase/pocketbase v0.25.8
+	github.com/pocketbase/pocketbase v0.25.9
 	github.com/stripe/stripe-go/v81 v81.4.0
 )
 
