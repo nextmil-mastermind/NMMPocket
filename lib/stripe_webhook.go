@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -64,12 +65,15 @@ func processIntentSucceded(event *stripe.Event, app *pocketbase.PocketBase) bool
 	return true
 }
 
-func invoiceResponseProcess(data map[string]interface{}, app *pocketbase.PocketBase) error {
+func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) error {
 	record, err := app.FindFirstRecordByData("invoices", "session", data["id"].(string))
 	if err != nil {
 		return fmt.Errorf("failed to find invoice: %v", err)
 	}
 	record.Set("paid", true)
+	//set paid date to now in 2022-01-01 10:00:00.123Z format
+	record.Set("paid_date", time.Now().Format(time.RFC3339))
+
 	err = app.Save(record)
 	if err != nil {
 		return fmt.Errorf("failed to save invoice: %v", err)
