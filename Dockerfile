@@ -1,6 +1,7 @@
 FROM golang:1.24-alpine as builder
 RUN mkdir /build
 ADD /lib /build/lib
+ADD /appform /build/appform
 ADD /go.mod /build/
 ADD /go.sum /build/
 ADD /go.work /build/
