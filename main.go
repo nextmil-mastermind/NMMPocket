@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"nmmpocket/appform"
 	"nmmpocket/lib"
 	"os"
 	"strings"
@@ -200,6 +201,10 @@ func main() {
 			}
 			// return success
 			return e.JSON(http.StatusOK, nil)
+		})
+		//receive submissions from the appform
+		se.Router.POST("/appform/submission", func(e *core.RequestEvent) error {
+			return appform.ReceivedSubmissionRoute(app, e)
 		})
 		return se.Next()
 	})
