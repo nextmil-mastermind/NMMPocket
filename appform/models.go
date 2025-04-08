@@ -59,3 +59,8 @@ func (as *ApplicationSubmission) VerifyTurnstile(secret string) (bool, error) {
 
 	return result.Success, nil
 }
+
+// ToApplication returns just the Application part of the submission
+func (as *ApplicationSubmission) ToApplication() Application {
+	return as.Application
+}
