@@ -206,6 +206,9 @@ func main() {
 		se.Router.POST("/appform/submission", func(e *core.RequestEvent) error {
 			return appform.ReceivedSubmissionRoute(app, e)
 		})
+		se.Router.POST("/appform/submission/small", func(e *core.RequestEvent) error {
+			return appform.ReceivedSmallSubmissionRoute(app, e)
+		})
 		return se.Next()
 	})
 

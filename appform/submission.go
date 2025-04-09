@@ -39,6 +39,7 @@ func ReceivedSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) e
 	record.Set("message", submission.Message)
 	record.Set("terms", submission.Terms)
 	record.Set("human", success)
+	record.Set("type", "full")
 	err = app.Save(record)
 	if err != nil {
 		return err
@@ -46,6 +47,34 @@ func ReceivedSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) e
 	if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
 		//log the error
 		app.Logger().Error("Error sending to email scheduler", "error", err)
+	}
+	return e.JSON(http.StatusOK, "Application submitted successfully")
+}
+
+func ReceivedSmallSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) error {
+	var submission ApplicationSubmission
+	err := e.BindBody(&submission)
+	if err != nil {
+		return e.JSON(http.StatusBadRequest, err)
+	}
+	success, err := submission.VerifyTurnstile(os.Getenv("turnstile_secret"))
+	if err != nil {
+		return e.JSON(http.StatusBadRequest, err)
+	}
+	collection, err := app.FindCollectionByNameOrId("applications")
+	if err != nil {
+		return err
+	}
+	record := core.NewRecord(collection)
+	record.Set("first_name", submission.FirstName)
+	record.Set("last_name", submission.LastName)
+	record.Set("email_address", submission.EmailAddress)
+	record.Set("phone", submission.Phone)
+	record.Set("type", "small")
+	record.Set("human", success)
+	err = app.Save(record)
+	if err != nil {
+		return err
 	}
 	return e.JSON(http.StatusOK, "Application submitted successfully")
 }

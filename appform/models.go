@@ -16,12 +16,12 @@ type Application struct {
 	Phone        string  `json:"phone"`
 	Company      *string `json:"company,omitempty"`
 	Website      *string `json:"website,omitempty"`
-	Address      string  `json:"address"`
-	City         string  `json:"city"`
-	State        string  `json:"state"`
-	Zip          string  `json:"zip"`
+	Address      string  `json:"address,omitempty"`
+	City         string  `json:"city,omitempty"`
+	State        string  `json:"state,omitempty"`
+	Zip          string  `json:"zip,omitempty"`
 	Message      *string `json:"message,omitempty"`
-	Terms        bool    `json:"terms"`
+	Terms        bool    `json:"terms,omitempty"`
 	Human        *bool   `json:"human,omitempty"`
 }
 
