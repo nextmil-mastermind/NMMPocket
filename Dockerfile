@@ -5,6 +5,7 @@ ADD /appform /build/appform
 ADD /go.mod /build/
 ADD /go.sum /build/
 ADD /go.work /build/
+ADD /authentication /build/authentication
 ADD *.go /build/
 WORKDIR /build
 RUN GOOS=linux GOARCH=amd64 go build -o pocketbase

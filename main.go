@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"nmmpocket/appform"
+	"nmmpocket/authentication"
 	"nmmpocket/lib"
 	"os"
 	"strings"
@@ -209,6 +210,7 @@ func main() {
 		se.Router.POST("/appform/submission/small", func(e *core.RequestEvent) error {
 			return appform.ReceivedSmallSubmissionRoute(app, e)
 		})
+		authentication.Routes(se.Router)
 		return se.Next()
 	})
 
