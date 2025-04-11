@@ -30,6 +30,7 @@ func main() {
 			log.Fatal("Error loading .env file")
 		}
 	}
+	authentication.Init()
 	rpOriginsEnv := os.Getenv("origins")
 	rpOrigins := strings.Split(rpOriginsEnv, ",")
 
