@@ -134,10 +134,14 @@ func grab_card(email string) (SavedCard, error) {
 }
 
 func save_card(email string, paymentID string, last4 string) error {
-	// save card to db
-	_, err := pgDB.Exec("INSERT INTO stored_cards (email, payment_id, last_4) VALUES ($1, $2, $3)", email, paymentID, last4)
+	// Use PostgreSQL's upsert feature with email as the unique key
+	_, err := pgDB.Exec(
+		"INSERT INTO stored_cards (email, payment_id, last_4) VALUES ($1, $2, $3) "+
+			"ON CONFLICT (email) DO UPDATE SET payment_id = $2, last_4 = $3",
+		email, paymentID, last4)
+
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to save card: %w", err)
 	}
 	return nil
 }
