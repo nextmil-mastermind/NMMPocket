@@ -89,42 +89,13 @@ func InvoiceAutopayForceRoute(e *core.RequestEvent) error {
 	if err := mapstructure.Decode(record.PublicExport(), &invoice); err != nil {
 		return e.JSON(500, map[string]string{"error": "Failed to decode invoice"})
 	}
-	//check if card is stored
-	card, err := grab_card(invoice.Email)
+
+	charged, err := createStripeCharge(invoice, e.App.(*pocketbase.PocketBase))
 	if err != nil {
-		return e.JSON(500, map[string]string{"error": "Failed to grab card"})
+		return e.JSON(500, map[string]string{"error": "Failed to create charge"})
 	}
-	// List customers filtered by email.
-	params := &stripe.CustomerListParams{}
-	params.Filters.AddFilter("email", "", invoice.Email)
-	customerIter := customer.List(params)
-	// Check if any customer was found.
-	if !customerIter.Next() {
-		return e.JSON(404, map[string]string{"error": "No customer found with email"})
-	}
-	cust := customerIter.Customer()
-	amountCents := int64(invoice.Amount * 100)
-	// Create PaymentIntent parameters.
-	piParams := &stripe.PaymentIntentParams{
-		Amount:        stripe.Int64(amountCents),
-		Currency:      stripe.String("usd"),
-		Customer:      stripe.String(cust.ID),
-		PaymentMethod: stripe.String(card.PaymentID),
-		OffSession:    stripe.Bool(true),
-		Confirm:       stripe.Bool(true),
-		ReceiptEmail:  stripe.String(invoice.Email),
-		Description:   stripe.String(invoice.InvoiceName),
-	}
-	piParams.AddMetadata("type", "invoice")
-	// Create the PaymentIntent.
-	pi, err := paymentintent.New(piParams)
-	if err != nil {
-		return e.JSON(500, map[string]string{"error": "Failed to create payment intent"})
-	}
-	record.Set("session", pi.ID)
-	err = e.App.Save(record)
-	if err != nil {
-		return e.JSON(500, map[string]string{"error": "Failed to save invoice"})
+	if !charged {
+		return e.JSON(500, map[string]string{"error": "Failed to charge invoice"})
 	}
 
 	return e.JSON(200, map[string]string{"status": "success"})
