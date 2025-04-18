@@ -85,8 +85,21 @@ func InvoiceAutopayForceRoute(e *core.RequestEvent) error {
 	if err != nil {
 		return e.JSON(404, map[string]string{"error": "Invoice not found"})
 	}
+
 	invoice := Invoice{}
-	if err := mapstructure.Decode(record.PublicExport(), &invoice); err != nil {
+	// Using custom decoder configuration with WeaklyTypedInput option
+	config := &mapstructure.DecoderConfig{
+		WeaklyTypedInput: true,
+		Result:           &invoice,
+	}
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		return e.JSON(500, map[string]string{"error": "Failed to create decoder"})
+	}
+
+	if err := decoder.Decode(record.PublicExport()); err != nil {
+		// Log the error and record data for debugging
+		fmt.Printf("Invoice decode error: %v, data: %v\n", err, record.PublicExport())
 		return e.JSON(500, map[string]string{"error": "Failed to decode invoice"})
 	}
 
