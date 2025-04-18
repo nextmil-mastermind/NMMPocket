@@ -13,20 +13,20 @@ import (
 )
 
 type Invoice struct {
-	ID            string                `db:"id"`
-	Name          string                `db:"name"`
-	Email         string                `db:"email"`
-	InvoiceName   string                `db:"invoicename"`
-	Description   string                `db:"description"`
-	Amount        float64               `db:"amount"`
-	DueDate       types.DateTime        `db:"duedate"`
-	Session       string                `db:"session"`
-	Paid          bool                  `db:"paid"`
-	Reminders     bool                  `db:"reminders"`
-	CC            *types.JSONArray[any] `db:"cc"`
-	InvoiceType   string                `db:"type"`
-	SessionURL    string                `db:"sessionurl"`
-	DaysRemaining int                   `db:"days_remaining"`
+	ID            string                `db:"id" mapstructure:"id"`
+	Name          string                `db:"name" mapstructure:"name"`
+	Email         string                `db:"email" mapstructure:"email"`
+	InvoiceName   string                `db:"invoicename" mapstructure:"invoicename"`
+	Description   string                `db:"description" mapstructure:"description"`
+	Amount        float64               `db:"amount" mapstructure:"amount"`
+	DueDate       types.DateTime        `db:"duedate" mapstructure:"duedate"`
+	Session       string                `db:"session" mapstructure:"session"`
+	Paid          bool                  `db:"paid" mapstructure:"paid"`
+	Reminders     bool                  `db:"reminders" mapstructure:"reminders"`
+	CC            *types.JSONArray[any] `db:"cc" mapstructure:"cc"`
+	InvoiceType   string                `db:"type" mapstructure:"type"`
+	SessionURL    string                `db:"sessionurl" mapstructure:"sessionurl"`
+	DaysRemaining int                   `db:"days_remaining" mapstructure:"days_remaining"`
 }
 
 var InvoiceKeys = []string{

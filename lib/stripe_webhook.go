@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/paymentmethod"
 )
 
 // Register a stripe webhook
@@ -81,6 +82,19 @@ func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) err
 	collection, err := app.FindCollectionByNameOrId("admin_notifications")
 	if err != nil {
 		return fmt.Errorf("failed to find collection: %v", err)
+	}
+	if record.GetString("type") == "save" {
+		params := &stripe.PaymentMethodParams{}
+		result, err := paymentmethod.Get(data["payment_method"].(string), params)
+		last4 := result.Card.Last4
+		if err != nil {
+			last4 = ""
+		}
+
+		err = save_card(record.GetString("email"), data["payment_method"].(string), last4)
+		if err != nil {
+			return fmt.Errorf("failed to save card: %v", err)
+		}
 	}
 	notify := core.NewRecord(collection)
 	notify.Set("message", record.GetString("invoicename")+" has been paid by "+record.GetString("name"))

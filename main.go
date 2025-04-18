@@ -211,6 +211,7 @@ func main() {
 		se.Router.POST("/appform/submission/small", func(e *core.RequestEvent) error {
 			return appform.ReceivedSmallSubmissionRoute(app, e)
 		})
+		se.Router.POST("/invoice/autopay/force", lib.InvoiceAutopayForceRoute).Bind(apis.RequireAuth())
 		authentication.Routes(se.Router)
 		return se.Next()
 	})
