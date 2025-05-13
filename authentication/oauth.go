@@ -214,8 +214,15 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 		return apis.NewBadRequestError("Invalid client configuration", nil)
 	}
 
+	// Get the auth collection
+	authCollection, err := e.App.FindCollectionByNameOrId(collectionString)
+	if err != nil {
+		fmt.Printf("Error: Invalid auth collection - %v\n", err)
+		return apis.NewBadRequestError("Invalid client configuration", nil)
+	}
+
 	// Authenticate user using the specified collection
-	authRecord, err := e.App.FindAuthRecordByEmail(collection, username)
+	authRecord, err := e.App.FindAuthRecordByEmail(authCollection, username)
 	if err != nil {
 		fmt.Printf("Error: User not found - %v\n", err)
 		return apis.NewBadRequestError("Invalid credentials", nil)
