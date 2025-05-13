@@ -220,7 +220,8 @@ func handleTokenRoute(e *core.RequestEvent) error {
 		return apis.NewForbiddenError("Invalid client_secret", nil)
 	}
 
-	if oauthApp.GetString("redirect_uri") != redirectURI {
+	allowedURI := oauthApp.GetString("redirect_uri")
+	if !validateRedirectURI(allowedURI, redirectURI) {
 		return apis.NewForbiddenError("Invalid redirect_uri", nil)
 	}
 
