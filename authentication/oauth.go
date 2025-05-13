@@ -240,14 +240,19 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 	// Update session with auth code and user ID
 	session.AuthCode = authCode
 	session.UserID = authRecord.Id
-	record.Load(session.toMap())
+
+	// Update the record with new values
+	record.Set("auth_code", authCode)
+	record.Set("user_id", authRecord.Id)
 
 	if err := e.App.Save(record); err != nil {
+		fmt.Printf("Error: Failed to update session - %v\n", err)
 		return apis.NewInternalServerError("Failed to update session", err)
 	}
 
 	fmt.Printf("Generated auth code: %s\n", authCode)
 	fmt.Printf("For user ID: %s\n", authRecord.Id)
+	fmt.Printf("Updated session with auth code\n")
 
 	// Redirect back to client with authorization code
 	redirectURL := session.RedirectURI
@@ -258,12 +263,7 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 
 	fmt.Printf("Redirecting to: %s\n", redirectURL)
 
-	// Clean up session
-	if err := e.App.Delete(record); err != nil {
-		fmt.Printf("Warning: Failed to delete session: %v\n", err)
-	}
-
-	fmt.Printf("=== End OAuth Login POST Request ===\n\n")
+	// Don't delete the session here - we need it for the token request
 	return e.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -395,17 +395,22 @@ func handleTokenRoute(e *core.RequestEvent) error {
 
 	user, err := e.App.FindRecordById("users", session.UserID)
 	if err != nil {
-		fmt.Printf("\nError: Invalid user - %v\n", err)
+		fmt.Printf("Error: Invalid user - %v\n", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
 
 	token, err := user.NewAuthToken()
 	if err != nil {
-		fmt.Printf("\nError: Failed to generate auth token - %v\n", err)
+		fmt.Printf("Error: Failed to generate auth token - %v\n", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
 
-	fmt.Printf("\nSuccess: Token generated for user %s\n", session.UserID)
+	// Now that we've successfully generated the token, we can delete the session
+	if err := e.App.Delete(records[0]); err != nil {
+		fmt.Printf("Warning: Failed to delete session: %v\n", err)
+	}
+
+	fmt.Printf("Success: Token generated for user %s\n", session.UserID)
 	fmt.Printf("=== End OAuth Token Request ===\n\n")
 
 	// Return token response
