@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -183,15 +184,19 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 
 // handleTokenRoute handles the OAuth2 token endpoint
 func handleTokenRoute(e *core.RequestEvent) error {
+	fmt.Printf("\n=== OAuth Token Request ===\n")
+	fmt.Printf("Method: %s\n", e.Request.Method)
+	fmt.Printf("Remote IP: %s\n", e.Request.RemoteAddr)
+
 	// Only allow POST requests
 	if e.Request.Method != http.MethodPost {
-		e.App.Logger().Debug("Token route: Invalid method", "method", e.Request.Method)
+		fmt.Printf("Error: Invalid method\n")
 		return apis.NewBadRequestError("Method not allowed", nil)
 	}
 
 	// Parse form data
 	if err := e.Request.ParseForm(); err != nil {
-		e.App.Logger().Debug("Token route: Failed to parse form", "error", err)
+		fmt.Printf("Error: Failed to parse form - %v\n", err)
 		return apis.NewBadRequestError("Invalid request", err)
 	}
 
@@ -202,49 +207,47 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	clientSecret := e.Request.FormValue("client_secret")
 	redirectURI := e.Request.FormValue("redirect_uri")
 
-	e.App.Logger().Debug("Token route: Received request",
-		"grant_type", grantType,
-		"client_id", clientID,
-		"redirect_uri", redirectURI,
-		"code_length", len(code),
-	)
+	fmt.Printf("\nRequest Parameters:\n")
+	fmt.Printf("grant_type: %s\n", grantType)
+	fmt.Printf("client_id: %s\n", clientID)
+	fmt.Printf("redirect_uri: %s\n", redirectURI)
+	fmt.Printf("code length: %d\n", len(code))
+	fmt.Printf("client_secret length: %d\n", len(clientSecret))
 
 	// Validate required parameters
 	if grantType == "" || code == "" || clientID == "" || clientSecret == "" || redirectURI == "" {
-		e.App.Logger().Debug("Token route: Missing required parameters",
-			"has_grant_type", grantType != "",
-			"has_code", code != "",
-			"has_client_id", clientID != "",
-			"has_client_secret", clientSecret != "",
-			"has_redirect_uri", redirectURI != "",
-		)
+		fmt.Printf("\nError: Missing required parameters\n")
+		fmt.Printf("has_grant_type: %v\n", grantType != "")
+		fmt.Printf("has_code: %v\n", code != "")
+		fmt.Printf("has_client_id: %v\n", clientID != "")
+		fmt.Printf("has_client_secret: %v\n", clientSecret != "")
+		fmt.Printf("has_redirect_uri: %v\n", redirectURI != "")
 		return apis.NewBadRequestError("Missing required parameters", nil)
 	}
 
 	// Validate grant_type
 	if grantType != "authorization_code" {
-		e.App.Logger().Debug("Token route: Invalid grant type", "grant_type", grantType)
+		fmt.Printf("\nError: Invalid grant type\n")
 		return apis.NewBadRequestError("Invalid grant_type. Only 'authorization_code' is supported", nil)
 	}
 
 	// Validate client credentials
 	oauthApp, err := e.App.FindRecordById("oauth_apps", clientID)
 	if err != nil {
-		e.App.Logger().Debug("Token route: Invalid client_id", "client_id", clientID, "error", err)
+		fmt.Printf("\nError: Invalid client_id - %v\n", err)
 		return apis.NewForbiddenError("Invalid client_id", nil)
 	}
 
 	if oauthApp.GetString("client_secret") != clientSecret {
-		e.App.Logger().Debug("Token route: Invalid client_secret", "client_id", clientID)
+		fmt.Printf("\nError: Invalid client_secret\n")
 		return apis.NewForbiddenError("Invalid client_secret", nil)
 	}
 
 	allowedURI := oauthApp.GetString("redirect_uri")
 	if !validateRedirectURI(allowedURI, redirectURI) {
-		e.App.Logger().Debug("Token route: Invalid redirect_uri",
-			"allowed", allowedURI,
-			"provided", redirectURI,
-		)
+		fmt.Printf("\nError: Invalid redirect_uri\n")
+		fmt.Printf("Allowed: %s\n", allowedURI)
+		fmt.Printf("Provided: %s\n", redirectURI)
 		return apis.NewForbiddenError("Invalid redirect_uri", nil)
 	}
 
@@ -258,27 +261,27 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	}
 
 	if session == nil {
-		e.App.Logger().Debug("Token route: Invalid authorization code",
-			"code", code,
-			"client_id", clientID,
-			"active_sessions", len(oauthSessions),
-		)
+		fmt.Printf("\nError: Invalid authorization code\n")
+		fmt.Printf("Code: %s\n", code)
+		fmt.Printf("Client ID: %s\n", clientID)
+		fmt.Printf("Active sessions: %d\n", len(oauthSessions))
 		return apis.NewBadRequestError("Invalid authorization code", nil)
 	}
 
 	user, err := e.App.FindRecordById("users", session.UserID)
 	if err != nil {
-		e.App.Logger().Debug("Token route: Invalid user", "user_id", session.UserID, "error", err)
+		fmt.Printf("\nError: Invalid user - %v\n", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
 
 	token, err := user.NewAuthToken()
 	if err != nil {
-		e.App.Logger().Debug("Token route: Failed to generate auth token", "user_id", session.UserID, "error", err)
+		fmt.Printf("\nError: Failed to generate auth token - %v\n", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
 
-	e.App.Logger().Debug("Token route: Successfully generated token", "user_id", session.UserID)
+	fmt.Printf("\nSuccess: Token generated for user %s\n", session.UserID)
+	fmt.Printf("=== End OAuth Token Request ===\n\n")
 
 	// Return token response
 	return e.JSON(http.StatusOK, map[string]any{
