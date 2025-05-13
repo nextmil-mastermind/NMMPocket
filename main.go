@@ -57,6 +57,7 @@ func main() {
 
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		lib.RegisterStripeWebhook(se.Router, app)
+		authentication.RegisterOAuthRoutes(se.Router)
 
 		se.Router.POST("/webauth/register/{collection}/{userb64}", func(e *core.RequestEvent) error {
 			collection := e.Request.PathValue("collection")
