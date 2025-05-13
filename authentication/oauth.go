@@ -185,11 +185,13 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 func handleTokenRoute(e *core.RequestEvent) error {
 	// Only allow POST requests
 	if e.Request.Method != http.MethodPost {
+		e.App.Logger().Debug("Token route: Invalid method", "method", e.Request.Method)
 		return apis.NewBadRequestError("Method not allowed", nil)
 	}
 
 	// Parse form data
 	if err := e.Request.ParseForm(); err != nil {
+		e.App.Logger().Debug("Token route: Failed to parse form", "error", err)
 		return apis.NewBadRequestError("Invalid request", err)
 	}
 
@@ -200,28 +202,49 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	clientSecret := e.Request.FormValue("client_secret")
 	redirectURI := e.Request.FormValue("redirect_uri")
 
+	e.App.Logger().Debug("Token route: Received request",
+		"grant_type", grantType,
+		"client_id", clientID,
+		"redirect_uri", redirectURI,
+		"code_length", len(code),
+	)
+
 	// Validate required parameters
 	if grantType == "" || code == "" || clientID == "" || clientSecret == "" || redirectURI == "" {
+		e.App.Logger().Debug("Token route: Missing required parameters",
+			"has_grant_type", grantType != "",
+			"has_code", code != "",
+			"has_client_id", clientID != "",
+			"has_client_secret", clientSecret != "",
+			"has_redirect_uri", redirectURI != "",
+		)
 		return apis.NewBadRequestError("Missing required parameters", nil)
 	}
 
 	// Validate grant_type
 	if grantType != "authorization_code" {
+		e.App.Logger().Debug("Token route: Invalid grant type", "grant_type", grantType)
 		return apis.NewBadRequestError("Invalid grant_type. Only 'authorization_code' is supported", nil)
 	}
 
 	// Validate client credentials
 	oauthApp, err := e.App.FindRecordById("oauth_apps", clientID)
 	if err != nil {
+		e.App.Logger().Debug("Token route: Invalid client_id", "client_id", clientID, "error", err)
 		return apis.NewForbiddenError("Invalid client_id", nil)
 	}
 
 	if oauthApp.GetString("client_secret") != clientSecret {
+		e.App.Logger().Debug("Token route: Invalid client_secret", "client_id", clientID)
 		return apis.NewForbiddenError("Invalid client_secret", nil)
 	}
 
 	allowedURI := oauthApp.GetString("redirect_uri")
 	if !validateRedirectURI(allowedURI, redirectURI) {
+		e.App.Logger().Debug("Token route: Invalid redirect_uri",
+			"allowed", allowedURI,
+			"provided", redirectURI,
+		)
 		return apis.NewForbiddenError("Invalid redirect_uri", nil)
 	}
 
@@ -235,17 +258,27 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	}
 
 	if session == nil {
+		e.App.Logger().Debug("Token route: Invalid authorization code",
+			"code", code,
+			"client_id", clientID,
+			"active_sessions", len(oauthSessions),
+		)
 		return apis.NewBadRequestError("Invalid authorization code", nil)
 	}
 
 	user, err := e.App.FindRecordById("users", session.UserID)
 	if err != nil {
+		e.App.Logger().Debug("Token route: Invalid user", "user_id", session.UserID, "error", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
+
 	token, err := user.NewAuthToken()
 	if err != nil {
+		e.App.Logger().Debug("Token route: Failed to generate auth token", "user_id", session.UserID, "error", err)
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
+
+	e.App.Logger().Debug("Token route: Successfully generated token", "user_id", session.UserID)
 
 	// Return token response
 	return e.JSON(http.StatusOK, map[string]any{
