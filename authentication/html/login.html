@@ -145,7 +145,7 @@
             <h1>Next Million Mastermind</h1>
             <p>Please login to your account <br> Note: You are authorizing {{.client_name}} to access your account</p>
         </div>
-        <form id="loginForm">
+        <form id="loginForm" method="POST" action="/oauth/login">
             <div class="form-group">
                 <label for="username">Username or Email</label>
                 <input type="text" id="username" name="username" required>
@@ -160,59 +160,14 @@
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const form = e.target;
-            const submitButton = form.querySelector('.login-button');
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const submitButton = e.target.querySelector('.login-button');
             const errorMessage = document.getElementById('errorMessage');
             
-            // Get form data
-            const formData = new FormData(form);
-            const data = {
-                username: formData.get('username'),
-                password: formData.get('password')
-            };
-
-            try {
-                // Disable form and show loading state
-                submitButton.disabled = true;
-                submitButton.classList.add('loading');
-                errorMessage.style.display = 'none';
-
-                // Make POST request
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // If successful and we have a redirect URL, redirect the user
-                    if (result.redirect_url) {
-                        window.location.href = result.redirect_url;
-                    } else {
-                        // If no redirect URL provided, redirect to home
-                        window.location.href = '/';
-                    }
-                } else {
-                    // Show error message
-                    errorMessage.textContent = result.message || 'Login failed. Please try again.';
-                    errorMessage.style.display = 'block';
-                }
-            } catch (error) {
-                // Handle network or other errors
-                errorMessage.textContent = 'An error occurred. Please try again.';
-                errorMessage.style.display = 'block';
-            } finally {
-                // Re-enable form and remove loading state
-                submitButton.disabled = false;
-                submitButton.classList.remove('loading');
-            }
+            // Disable form and show loading state
+            submitButton.disabled = true;
+            submitButton.classList.add('loading');
+            errorMessage.style.display = 'none';
         });
     </script>
 </body>

@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
@@ -23,6 +24,32 @@ type OAuthSession struct {
 
 // In-memory store for OAuth sessions (in production, use a proper session store)
 var oauthSessions = make(map[string]*OAuthSession)
+
+// validateRedirectURI checks if the provided redirect URI matches the allowed one, ignoring dynamic parts
+func validateRedirectURI(allowedURI, providedURI string) bool {
+	// Extract base domains
+	allowedBase := extractBaseDomain(allowedURI)
+	providedBase := extractBaseDomain(providedURI)
+
+	// Check if base domains match
+	return allowedBase == providedBase
+}
+
+// extractBaseDomain extracts the base domain from a URI, removing dynamic parts
+func extractBaseDomain(uri string) string {
+	// Remove protocol
+	uri = strings.TrimPrefix(uri, "http://")
+	uri = strings.TrimPrefix(uri, "https://")
+
+	// Split by path segments
+	parts := strings.Split(uri, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Return just the domain
+	return parts[0]
+}
 
 func handleLoginGetRoute(e *core.RequestEvent) error {
 	// Extract OAuth2 parameters
@@ -47,7 +74,8 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 		return apis.NewForbiddenError("Invalid client_id", nil)
 	}
 
-	if oauthApp.GetString("redirect_uri") != redirectURI {
+	allowedURI := oauthApp.GetString("redirect_uri")
+	if !validateRedirectURI(allowedURI, redirectURI) {
 		return apis.NewForbiddenError("Invalid redirect_uri", nil)
 	}
 
