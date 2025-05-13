@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
@@ -24,8 +25,29 @@ type OAuthSession struct {
 	UserID      string
 }
 
-// In-memory store for OAuth sessions (in production, use a proper session store)
-var oauthSessions = make(map[string]*OAuthSession)
+// Convert OAuthSession to map for database storage
+func (s *OAuthSession) toMap() map[string]any {
+	return map[string]any{
+		"client_id":    s.ClientID,
+		"redirect_uri": s.RedirectURI,
+		"state":        s.State,
+		"expires_at":   s.ExpiresAt,
+		"auth_code":    s.AuthCode,
+		"user_id":      s.UserID,
+	}
+}
+
+// Create OAuthSession from database record
+func newOAuthSessionFromRecord(record *core.Record) *OAuthSession {
+	return &OAuthSession{
+		ClientID:    record.GetString("client_id"),
+		RedirectURI: record.GetString("redirect_uri"),
+		State:       record.GetString("state"),
+		ExpiresAt:   record.GetDateTime("expires_at").Time(),
+		AuthCode:    record.GetString("auth_code"),
+		UserID:      record.GetString("user_id"),
+	}
+}
 
 // validateRedirectURI checks if the provided redirect URI matches the allowed one, ignoring dynamic parts
 func validateRedirectURI(allowedURI, providedURI string) bool {
@@ -83,12 +105,30 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 
 	// Store OAuth session data
 	sessionID := security.RandomString(32)
-	oauthSessions[sessionID] = &OAuthSession{
+	session := &OAuthSession{
 		ClientID:    clientID,
 		RedirectURI: redirectURI,
 		State:       state,
 		ExpiresAt:   time.Now().Add(10 * time.Minute), // Session expires in 10 minutes
 	}
+
+	// Create session record
+	collection, err := e.App.FindCollectionByNameOrId("oauth_sessions")
+	if err != nil {
+		return apis.NewInternalServerError("Failed to access sessions collection", err)
+	}
+
+	record := core.NewRecord(collection)
+	record.Load(session.toMap())
+	record.Id = sessionID
+
+	if err := e.App.Save(record); err != nil {
+		return apis.NewInternalServerError("Failed to save session", err)
+	}
+
+	fmt.Printf("Created new session:\n")
+	fmt.Printf("Session ID: %s\n", sessionID)
+	fmt.Printf("Expires at: %v\n", session.ExpiresAt)
 
 	// Set session cookie
 	http.SetCookie(e.Response, &http.Cookie{
@@ -115,23 +155,42 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 		"client_name": oauthApp.GetString("name"),
 	})
 	if err != nil {
+		fmt.Printf("Error: Failed to render login page - %v\n", err)
 		return apis.NewInternalServerError("Failed to render login page", err)
 	}
 
+	fmt.Printf("=== End OAuth Login GET Request ===\n\n")
 	return e.HTML(http.StatusOK, html)
 }
 
 // handleLoginPostRoute handles the login form submission
 func handleLoginPostRoute(e *core.RequestEvent) error {
+	fmt.Printf("\n=== OAuth Login POST Request ===\n")
+
 	// Get session ID from cookie
 	sessionCookie, err := e.Request.Cookie("oauth_session")
 	if err != nil {
+		fmt.Printf("Error: No session cookie found - %v\n", err)
 		return apis.NewBadRequestError("Invalid session", nil)
 	}
 
-	// Get session data
-	session, exists := oauthSessions[sessionCookie.Value]
-	if !exists || time.Now().After(session.ExpiresAt) {
+	fmt.Printf("Session ID from cookie: %s\n", sessionCookie.Value)
+
+	// Get session record
+	collection, err := e.App.FindCollectionByNameOrId("oauth_sessions")
+	if err != nil {
+		return apis.NewInternalServerError("Failed to access sessions collection", err)
+	}
+
+	record, err := e.App.FindRecordById(collection, sessionCookie.Value)
+	if err != nil {
+		return apis.NewBadRequestError("Session expired", nil)
+	}
+
+	session := newOAuthSessionFromRecord(record)
+	if time.Now().After(session.ExpiresAt) {
+		// Clean up expired session
+		e.App.Delete(record)
 		return apis.NewBadRequestError("Session expired", nil)
 	}
 
@@ -139,35 +198,49 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 	username := e.Request.FormValue("username")
 	password := e.Request.FormValue("password")
 
+	fmt.Printf("Login attempt for user: %s\n", username)
+
 	// Get OAuth app to determine collection
 	oauthApp, err := e.App.FindRecordById("oauth_apps", session.ClientID)
 	if err != nil {
+		fmt.Printf("Error: Invalid client - %v\n", err)
 		return apis.NewBadRequestError("Invalid client", nil)
 	}
 
 	// Get the collection from oauth_apps
-	collection := oauthApp.GetString("collection")
-	if collection == "" {
+	collectionString := oauthApp.GetString("collection")
+	if collectionString == "" {
+		fmt.Printf("Error: No collection specified in oauth_app\n")
 		return apis.NewBadRequestError("Invalid client configuration", nil)
 	}
 
 	// Authenticate user using the specified collection
 	authRecord, err := e.App.FindAuthRecordByEmail(collection, username)
 	if err != nil {
+		fmt.Printf("Error: User not found - %v\n", err)
 		return apis.NewBadRequestError("Invalid credentials", nil)
 	}
 
 	// Verify password
 	if !authRecord.ValidatePassword(password) {
+		fmt.Printf("Error: Invalid password\n")
 		return apis.NewBadRequestError("Invalid credentials", nil)
 	}
 
 	// Generate authorization code
 	authCode := security.RandomString(32)
 
-	// Store auth code in session
+	// Update session with auth code and user ID
 	session.AuthCode = authCode
 	session.UserID = authRecord.Id
+	record.Load(session.toMap())
+
+	if err := e.App.Save(record); err != nil {
+		return apis.NewInternalServerError("Failed to update session", err)
+	}
+
+	fmt.Printf("Generated auth code: %s\n", authCode)
+	fmt.Printf("For user ID: %s\n", authRecord.Id)
 
 	// Redirect back to client with authorization code
 	redirectURL := session.RedirectURI
@@ -176,9 +249,14 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 	}
 	redirectURL += "code=" + authCode + "&state=" + session.State
 
-	// Clean up session
-	delete(oauthSessions, sessionCookie.Value)
+	fmt.Printf("Redirecting to: %s\n", redirectURL)
 
+	// Clean up session
+	if err := e.App.Delete(record); err != nil {
+		fmt.Printf("Warning: Failed to delete session: %v\n", err)
+	}
+
+	fmt.Printf("=== End OAuth Login POST Request ===\n\n")
 	return e.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -252,22 +330,31 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	}
 
 	// Find session with matching auth code
-	var session *OAuthSession
-	for _, s := range oauthSessions {
-		if s.AuthCode == code && s.ClientID == clientID {
-			session = s
-			break
-		}
+	collection, err := e.App.FindCollectionByNameOrId("oauth_sessions")
+	if err != nil {
+		return apis.NewInternalServerError("Failed to access sessions collection", err)
 	}
 
-	if session == nil {
+	records, err := e.App.FindRecordsByFilter(
+		collection,
+		"auth_code = {:code} && client_id = {:client_id}",
+		"",
+		1,
+		0,
+		dbx.Params{"code": code, "client_id": clientID},
+	)
+	if err != nil {
+		return apis.NewInternalServerError("Failed to find session", err)
+	}
+
+	if len(records) == 0 {
 		fmt.Printf("\nError: Invalid authorization code\n")
 		fmt.Printf("Code: %s\n", code)
 		fmt.Printf("Client ID: %s\n", clientID)
-		fmt.Printf("Active sessions: %d\n", len(oauthSessions))
 		return apis.NewBadRequestError("Invalid authorization code", nil)
 	}
 
+	session := newOAuthSessionFromRecord(records[0])
 	user, err := e.App.FindRecordById("users", session.UserID)
 	if err != nil {
 		fmt.Printf("\nError: Invalid user - %v\n", err)
