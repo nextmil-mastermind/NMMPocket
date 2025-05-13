@@ -339,9 +339,36 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	// Find session with matching auth code
 	collection, err := e.App.FindCollectionByNameOrId("oauth_sessions")
 	if err != nil {
+		fmt.Printf("Error: Failed to find oauth_sessions collection - %v\n", err)
 		return apis.NewInternalServerError("Failed to access sessions collection", err)
 	}
 
+	fmt.Printf("Searching for session with:\n")
+	fmt.Printf("Auth code: %s\n", code)
+	fmt.Printf("Client ID: %s\n", clientID)
+
+	// First, let's see what sessions exist
+	allRecords, err := e.App.FindRecordsByFilter(
+		collection,
+		"",
+		"",
+		100,
+		0,
+	)
+	if err != nil {
+		fmt.Printf("Error: Failed to list sessions - %v\n", err)
+	} else {
+		fmt.Printf("Found %d total sessions\n", len(allRecords))
+		for _, r := range allRecords {
+			fmt.Printf("Session: client_id=%s, auth_code=%s, expires_at=%v\n",
+				r.GetString("client_id"),
+				r.GetString("auth_code"),
+				r.GetDateTime("expires_at").Time(),
+			)
+		}
+	}
+
+	// Now try to find our specific session
 	records, err := e.App.FindRecordsByFilter(
 		collection,
 		"auth_code = {:code} && client_id = {:client_id}",
@@ -351,17 +378,21 @@ func handleTokenRoute(e *core.RequestEvent) error {
 		dbx.Params{"code": code, "client_id": clientID},
 	)
 	if err != nil {
+		fmt.Printf("Error: Failed to find session - %v\n", err)
 		return apis.NewInternalServerError("Failed to find session", err)
 	}
 
 	if len(records) == 0 {
-		fmt.Printf("\nError: Invalid authorization code\n")
-		fmt.Printf("Code: %s\n", code)
-		fmt.Printf("Client ID: %s\n", clientID)
+		fmt.Printf("Error: No matching session found\n")
 		return apis.NewBadRequestError("Invalid authorization code", nil)
 	}
 
 	session := newOAuthSessionFromRecord(records[0])
+	fmt.Printf("Found matching session:\n")
+	fmt.Printf("Client ID: %s\n", session.ClientID)
+	fmt.Printf("Auth Code: %s\n", session.AuthCode)
+	fmt.Printf("Expires At: %v\n", session.ExpiresAt)
+
 	user, err := e.App.FindRecordById("users", session.UserID)
 	if err != nil {
 		fmt.Printf("\nError: Invalid user - %v\n", err)
