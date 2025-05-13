@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -100,8 +101,15 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 	})
 
 	// Render login page
+	var templatePath string
+	if os.Getenv("is_prod") == "true" {
+		templatePath = "/pb/authhtml/login.html"
+	} else {
+		templatePath = "authentication/html/login.html"
+	}
+
 	html, err := template.NewRegistry().LoadFiles(
-		"authentication/html/login.html",
+		templatePath,
 	).Render(map[string]any{
 		"client_name": oauthApp.GetString("name"),
 	})

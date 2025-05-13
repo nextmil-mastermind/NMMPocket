@@ -20,8 +20,10 @@ RUN apk add --no-cache \
 
 # Create a directory for PocketBase
 RUN mkdir -p /pb
+RUN mkdir -p /pb/authhtml
 
 COPY --from=builder /build/pocketbase /pb/pocketbase
+COPY --from=builder /build/authentication/html/* /pb/authhtml/
 
 # Make the binary executable
 RUN chmod +x /pb/pocketbase
