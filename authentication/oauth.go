@@ -332,10 +332,34 @@ func handleTokenRoute(e *core.RequestEvent) error {
 	})
 }
 
+// handleUserInfoRoute handles the OAuth2 userinfo endpoint
+func handleUserInfoRoute(e *core.RequestEvent) error {
+	loggedInUser := e.Auth
+	if loggedInUser == nil {
+		return apis.NewBadRequestError("Not logged in", nil)
+	}
+	//check collection, if collection is users then return name, if collection is members then return first_name + " " + last_name
+	user_data := map[string]any{}
+	if loggedInUser.GetString("collectionName") == "users" {
+		user_data["name"] = loggedInUser.GetString("name")
+	} else if loggedInUser.GetString("collectionName") == "members" {
+		user_data["name"] = loggedInUser.GetString("first_name") + " " + loggedInUser.GetString("last_name")
+	}
+	user_data["email"] = loggedInUser.GetString("email")
+	user_data["sub"] = loggedInUser.Id
+	user_data["picture"] = ""
+	if loggedInUser.GetString("avatar") != "" {
+		user_data["picture"] = "https://pocket.nextmil.org/api/files/" + loggedInUser.GetString("collectionName") + "/" + loggedInUser.Id + "/" + loggedInUser.GetString("avatar")
+	}
+
+	return e.JSON(http.StatusOK, user_data)
+}
+
 // RegisterOAuthRoutes registers the OAuth2 routes
 func RegisterOAuthRoutes(router *router.Router[*core.RequestEvent]) {
 	// OAuth2 routes
 	router.GET("/oauth/login", handleLoginGetRoute)
 	router.POST("/oauth/login", handleLoginPostRoute)
 	router.POST("/oauth/token", handleTokenRoute)
+	router.GET("/oauth/userinfo", handleUserInfoRoute).Bind(apis.RequireAuth())
 }
