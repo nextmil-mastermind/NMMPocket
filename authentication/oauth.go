@@ -342,12 +342,17 @@ func handleUserInfoRoute(e *core.RequestEvent) error {
 	user_data := map[string]any{}
 	if loggedInUser.GetString("collectionName") == "users" {
 		user_data["name"] = loggedInUser.GetString("name")
+		user_data["roles"] = loggedInUser.GetString("roles")
 	} else if loggedInUser.GetString("collectionName") == "members" {
 		user_data["name"] = loggedInUser.GetString("first_name") + " " + loggedInUser.GetString("last_name")
+		user_data["group"] = loggedInUser.GetString("group")
+		user_data["expiration_date"] = loggedInUser.GetDateTime("expiration").Time().Format("2006-01-02")
 	}
 	user_data["email"] = loggedInUser.GetString("email")
 	user_data["sub"] = loggedInUser.Id
 	user_data["picture"] = ""
+	user_data["username"] = loggedInUser.GetString("username")
+
 	if loggedInUser.GetString("avatar") != "" {
 		user_data["picture"] = "https://pocket.nextmil.org/api/files/" + loggedInUser.GetString("collectionName") + "/" + loggedInUser.Id + "/" + loggedInUser.GetString("avatar")
 	}
