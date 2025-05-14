@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -20,6 +21,7 @@ type OAuthSession struct {
 	ClientID    string
 	RedirectURI string
 	State       string
+	Scope       string
 	ExpiresAt   time.Time
 	AuthCode    string
 	UserID      string
@@ -31,6 +33,7 @@ func (s *OAuthSession) toMap() map[string]any {
 		"client_id":    s.ClientID,
 		"redirect_uri": s.RedirectURI,
 		"state":        s.State,
+		"scope":        s.Scope,
 		"expires_at":   s.ExpiresAt,
 		"auth_code":    s.AuthCode,
 		"user_id":      s.UserID,
@@ -43,6 +46,7 @@ func newOAuthSessionFromRecord(record *core.Record) *OAuthSession {
 		ClientID:    record.GetString("client_id"),
 		RedirectURI: record.GetString("redirect_uri"),
 		State:       record.GetString("state"),
+		Scope:       record.GetString("scope"),
 		ExpiresAt:   record.GetDateTime("expires_at").Time(),
 		AuthCode:    record.GetString("auth_code"),
 		UserID:      record.GetString("user_id"),
@@ -81,6 +85,7 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 	redirectURI := e.Request.URL.Query().Get("redirect_uri")
 	state := e.Request.URL.Query().Get("state")
 	responseType := e.Request.URL.Query().Get("response_type")
+	scope := e.Request.URL.Query().Get("scope")
 
 	// Validate required parameters
 	if clientID == "" || redirectURI == "" || state == "" {
@@ -109,6 +114,7 @@ func handleLoginGetRoute(e *core.RequestEvent) error {
 		ClientID:    clientID,
 		RedirectURI: redirectURI,
 		State:       state,
+		Scope:       scope,
 		ExpiresAt:   time.Now().Add(10 * time.Minute), // Session expires in 10 minutes
 	}
 
@@ -241,6 +247,55 @@ func handleLoginPostRoute(e *core.RequestEvent) error {
 	return e.Redirect(http.StatusFound, redirectURL)
 }
 
+// Generate JWT ID token
+func generateIDToken(user *core.Record, clientID string, scope string) (string, error) {
+	// Get JWT secret from environment
+	jwtSecret := os.Getenv("shared_secret")
+	if jwtSecret == "" {
+		return "", fmt.Errorf("JWT_SECRET not configured")
+	}
+
+	// Create claims
+	claims := jwt.MapClaims{
+		"iss":       "https://pocket.nextmil.org", // Your issuer URL
+		"sub":       user.Id,
+		"aud":       clientID,
+		"exp":       time.Now().Add(time.Hour).Unix(), // 1 hour expiration
+		"iat":       time.Now().Unix(),
+		"auth_time": time.Now().Unix(),
+	}
+
+	// Add claims based on scope
+	for s := range strings.SplitSeq(scope, " ") {
+		switch s {
+		case "profile":
+			if user.Collection().Name == "users" {
+				claims["name"] = user.GetString("name")
+				claims["roles"] = user.GetString("roles")
+			} else if user.Collection().Name == "members" {
+				claims["name"] = user.GetString("first_name") + " " + user.GetString("last_name")
+				claims["given_name"] = user.GetString("first_name")
+				claims["family_name"] = user.GetString("last_name")
+				claims["group"] = user.GetString("group")
+				claims["expiration_date"] = user.GetDateTime("expiration").Time().Format("2006-01-02")
+			}
+			claims["preferred_username"] = user.GetString("username")
+
+		case "email":
+			claims["email"] = user.GetString("email")
+			claims["email_verified"] = true // Assuming emails are verified
+		case "picture":
+			if user.GetString("avatar") != "" {
+				claims["picture"] = "https://pocket.nextmil.org/api/files/" + user.Collection().Name + "/" + user.Id + "/" + user.GetString("avatar")
+			}
+		}
+	}
+
+	// Create token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(jwtSecret))
+}
+
 // handleTokenRoute handles the OAuth2 token endpoint
 func handleTokenRoute(e *core.RequestEvent) error {
 	// Only allow POST requests
@@ -324,12 +379,25 @@ func handleTokenRoute(e *core.RequestEvent) error {
 		fmt.Printf("Warning: Failed to delete session: %v\n", err)
 	}
 
-	// Return token response
-	return e.JSON(http.StatusOK, map[string]any{
+	// Prepare response
+	response := map[string]any{
 		"access_token": token,
 		"token_type":   "Bearer",
 		"expires_in":   1209600, // 14 days
-	})
+	}
+
+	// Check if scope includes "openid" - if so, generate ID token
+	if session.Scope != "" && strings.Contains(session.Scope, "openid") {
+		idToken, err := generateIDToken(user, session.ClientID, session.Scope)
+		if err != nil {
+			fmt.Printf("Warning: Failed to generate ID token: %v\n", err)
+		} else {
+			response["id_token"] = idToken
+		}
+	}
+
+	// Return token response
+	return e.JSON(http.StatusOK, response)
 }
 
 // handleUserInfoRoute handles the OAuth2 userinfo endpoint
