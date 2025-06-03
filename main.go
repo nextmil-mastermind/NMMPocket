@@ -244,7 +244,7 @@ func main() {
 	}
 }
 
-// isFourthMonday returns true iff t is a Monday and its day is 22–28.
+// isFourthMonday returns true if it is a Monday and its day is 22–28.
 func isFourthMonday(t time.Time) bool {
 	return t.Weekday() == time.Monday && t.Day() >= 22 && t.Day() <= 28
 }
