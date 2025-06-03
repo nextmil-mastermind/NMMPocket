@@ -13,6 +13,7 @@ import (
 	"nmmpocket/zoomcon"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/joho/godotenv"
@@ -69,7 +70,11 @@ func main() {
 	go zoomcon.StartStatusAggregator(appCtx, statusIn)
 
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
-	app.Cron().MustAdd("student_zoom_reg", "0 0 22-28 * 1", func() {
+	app.Cron().MustAdd("student_zoom_reg", "0 12 * * 1", func() {
+		now := time.Now()
+		if !isFourthMonday(now) {
+			return // Ignore Sundays, 1st/2nd/3rd/5th Mondays, etc.
+		}
 		zoomcon.RegisterMembers(app)
 	})
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
@@ -237,4 +242,9 @@ func main() {
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// isFourthMonday returns true iff t is a Monday and its day is 22–28.
+func isFourthMonday(t time.Time) bool {
+	return t.Weekday() == time.Monday && t.Day() >= 22 && t.Day() <= 28
 }
