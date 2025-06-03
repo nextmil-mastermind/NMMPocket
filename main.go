@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"nmmpocket/appform"
 	"nmmpocket/authentication"
 	"nmmpocket/lib"
+	"nmmpocket/zoomcon"
 	"os"
 	"strings"
 
@@ -18,6 +20,12 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81"
+)
+
+var (
+	statusIn = make(chan zoomcon.StatusEvent, 10_000) // global so any code can push
+	appCtx   context.Context
+	cancel   context.CancelFunc
 )
 
 func main() {
@@ -52,9 +60,18 @@ func main() {
 	stripe.Key = os.Getenv("STRIPE")
 	lib.InitDB()
 	app := pocketbase.New()
+	appCtx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize Zoom components before server starts
+	zoomcon.SetStatusChannel(statusIn)
+	zoomcon.Start(appCtx) // Start the worker with the application context
+	go zoomcon.StartStatusAggregator(appCtx, statusIn)
 
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
-
+	app.Cron().MustAdd("student_zoom_reg", "0 0 22-28 * 1", func() {
+		zoomcon.RegisterMembers(app)
+	})
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		lib.RegisterStripeWebhook(se.Router, app)
 		authentication.RegisterOAuthRoutes(se.Router)
@@ -75,7 +92,7 @@ func main() {
 			if err != nil {
 				return apis.NewNotFoundError("User not found.", err)
 			}
-			// start registration flow
+			// start the registration flow
 			options, sessionData, err := webAuthn.BeginRegistration(user)
 			if err != nil {
 				return apis.NewBadRequestError("Failed to start registration flow.", err)

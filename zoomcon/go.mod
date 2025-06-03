@@ -1,4 +1,4 @@
-module eventpocket/zoomcon
+module nmmpocket/zoomcon
 
 go 1.24
 

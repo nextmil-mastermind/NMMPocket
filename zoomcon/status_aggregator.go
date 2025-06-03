@@ -18,11 +18,15 @@ func StatusIn() chan StatusEvent {
 }
 
 type StatusEvent struct {
-	WebinarID string
-	ID        string
-	Email     string
+	EventID string
+	Type    string // "webinar" or "meeting"
+	ID      string
+	Email   string
 }
-type statusKey struct{ WebinarID string }
+type statusKey struct {
+	EventID   string
+	EventType string
+}
 
 func StartStatusAggregator(ctx context.Context, in <-chan StatusEvent) {
 	const batchSize = 30
@@ -41,7 +45,7 @@ func StartStatusAggregator(ctx context.Context, in <-chan StatusEvent) {
 			}
 			return
 		case ev := <-in: // new ID to update
-			k := statusKey{ev.WebinarID}
+			k := statusKey{EventID: ev.EventID, EventType: ev.Type}
 			batches[k] = append(batches[k], RegistrantStatus{ID: ev.ID, Email: ev.Email})
 
 			if len(batches[k]) >= batchSize {
@@ -63,7 +67,8 @@ func StartStatusAggregator(ctx context.Context, in <-chan StatusEvent) {
 func flushStatus(k statusKey, regs []RegistrantStatus) {
 	// queue a single StatusJob; the worker + limiter handle rate-control
 	queue <- StatusJob{
-		WebinarID:   k.WebinarID,
+		EventID:     k.EventID,
+		Type:        k.EventType,
 		Registrants: regs,
 	}
 }
