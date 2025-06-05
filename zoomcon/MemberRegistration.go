@@ -35,8 +35,7 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to get members: %v\n", err)
 		return err
 	}
-
-	zoom_meeting := os.Getenv("MemberMeeting")
+	zoomMeeting := os.Getenv("MemberMeeting")
 	eRespCh := make(chan RegistrationResult, len(members))
 	eErrCh := make(chan error, len(members))
 
@@ -49,7 +48,7 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 	for _, member := range members {
 		go func(p MemberReduced) {
 			Enqueue(RegisterMeetingJob{
-				MeetingID:    zoom_meeting,
+				MeetingID:    zoomMeeting,
 				OccurrenceID: meeting.OccurrenceId,
 				Person:       ZoomPerson{FirstName: p.FirstName, LastName: p.LastName, Email: p.Email, Phone: p.Phone},
 				RespCh:       eRespCh,
@@ -141,7 +140,7 @@ func (zt ZOOM_TOKEN) GrabMeetingOccurences() (MeetingOccurrence, error) {
 }
 
 func getMembers(app *pocketbase.PocketBase) ([]MemberReduced, error) {
-	members, err := app.FindRecordsByFilter("members", "expiration > @monthEnd", "-expiration", 0, 0)
+	members, err := app.FindRecordsByFilter("members", "expiration > @monthEnd || group = \"founder\"", "-expiration", 0, 0)
 	if err != nil {
 		return nil, err
 	}

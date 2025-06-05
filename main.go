@@ -64,7 +64,7 @@ func main() {
 	appCtx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize Zoom components before server starts
+	// Initialize Zoom components before the server starts
 	zoomcon.SetStatusChannel(statusIn)
 	zoomcon.Start(appCtx) // Start the worker with the application context
 	go zoomcon.StartStatusAggregator(appCtx, statusIn)
@@ -75,7 +75,10 @@ func main() {
 		if !isFourthMonday(now) {
 			return // Ignore Sundays, 1st/2nd/3rd/5th Mondays, etc.
 		}
-		zoomcon.RegisterMembers(app)
+		err := zoomcon.RegisterMembers(app)
+		if err != nil {
+			app.Logger().Error("Failed to register members for Zoom meeting", "error", err)
+		}
 	})
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		lib.RegisterStripeWebhook(se.Router, app)
