@@ -25,7 +25,7 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
 		return err
 	}
-	meeting, err := zt.GrabMeetingOccurences()
+	meeting, err := zt.GrabMeetingOccurrences()
 	if err != nil {
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab meeting occurences: %v\n", err)
 		return err
@@ -92,12 +92,46 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 			fmt.Printf("[DEBUG-ZOOM-API] Failed to register: %v\n", err)
 		}
 	}
+	// Send an http request to the os.Getenv("CalendarUrl") as a get with the Authorization header set to os.Getenv("CalendarToken")
+	if len(successfulRegistrations) > 0 {
+		err2, done := calendarReset()
+		if done {
+			return err2
+		}
+	}
 	return nil
 }
 
-func (zt ZOOM_TOKEN) GrabMeetingOccurences() (MeetingOccurrence, error) {
-	zoom_meeting := os.Getenv("MemberMeeting")
-	url := "https://api.zoom.us/v2/meetings/" + zoom_meeting
+func calendarReset() (error, bool) {
+	calendarURL := os.Getenv("CalendarUrl")
+	if calendarURL == "" {
+		fmt.Println("[DEBUG-Calendar-API] Calendar URL is not set, skipping calendar update.")
+		return nil, true
+	}
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", calendarURL, nil)
+	if err != nil {
+		fmt.Printf("[DEBUG-Calendar-API] Failed to create calendar request: %v\n", err)
+		return err, true
+	}
+	req.Header.Set("Authorization", os.Getenv("CalendarToken"))
+	res, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[DEBUG-Calendar-API] Failed to send calendar request: %v\n", err)
+		return err, true
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		fmt.Printf("[DEBUG-ZOOM-API] Calendar update failed with status code: %d\n", res.StatusCode)
+		return fmt.Errorf("calendar update failed with status code: %d", res.StatusCode), true
+	}
+	fmt.Println("[DEBUG-ZOOM-API] Calendar updated successfully.")
+	return nil, false
+}
+
+func (zt *ZOOM_TOKEN) GrabMeetingOccurrences() (MeetingOccurrence, error) {
+	zoomMeeting := os.Getenv("MemberMeeting")
+	url := "https://api.zoom.us/v2/meetings/" + zoomMeeting
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -120,7 +154,7 @@ func (zt ZOOM_TOKEN) GrabMeetingOccurences() (MeetingOccurrence, error) {
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return MeetingOccurrence{}, fmt.Errorf("Failed to read response body: %v", err)
+		return MeetingOccurrence{}, fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	var response MeetingResponse
@@ -128,7 +162,7 @@ func (zt ZOOM_TOKEN) GrabMeetingOccurences() (MeetingOccurrence, error) {
 	if res.StatusCode == 200 {
 		err = json.Unmarshal(body, &response)
 		if err != nil {
-			return MeetingOccurrence{}, fmt.Errorf("Failed to unmarshal response body: %v", err)
+			return MeetingOccurrence{}, fmt.Errorf("failed to unmarshal response body: %v", err)
 		}
 		for _, meeting := range response.Occurrences {
 			if meeting.Status == "available" {
@@ -140,7 +174,7 @@ func (zt ZOOM_TOKEN) GrabMeetingOccurences() (MeetingOccurrence, error) {
 }
 
 func getMembers(app *pocketbase.PocketBase) ([]MemberReduced, error) {
-	members, err := app.FindRecordsByFilter("members", "expiration > @monthEnd || group = \"founder\"", "-expiration", 0, 0)
+	members, err := app.FindRecordsByFilter("members", "email != \"info@nextmilmastermind.com\" && (expiration > @monthEnd || group = \"founder\")", "-expiration", 0, 0)
 	if err != nil {
 		return nil, err
 	}

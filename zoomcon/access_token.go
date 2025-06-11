@@ -23,9 +23,9 @@ GetAccessToken gets the access token for the Zoom API.
 Returns: The access token for the Zoom API.
 Error: An error if the access token retrieval fails.
 */
-func (z *ZOOM_TOKEN) GetAccessToken() (string, error) {
-	if z.Expires.Before(time.Now()) {
-		var zt ZOOM_ACCESS_TOKEN
+func (zt *ZOOM_TOKEN) GetAccessToken() (string, error) {
+	if zt.Expires.Before(time.Now()) {
+		var accessToken ZOOM_ACCESS_TOKEN
 		url := "https://zoom.us/oauth/token?grant_type=account_credentials&account_id=" + os.Getenv("ZOOM_ID")
 		method := "POST"
 
@@ -50,10 +50,10 @@ func (z *ZOOM_TOKEN) GetAccessToken() (string, error) {
 			fmt.Println(err)
 			return "", err
 		}
-		json.Unmarshal(body, &zt)
-		z.AccessToken = zt.AccessToken
-		z.Expires = time.Now().Add(time.Duration(zt.ExpiresIn) * time.Second)
-		return z.AccessToken, nil
+		json.Unmarshal(body, &accessToken)
+		zt.AccessToken = accessToken.AccessToken
+		zt.Expires = time.Now().Add(time.Duration(accessToken.ExpiresIn) * time.Second)
+		return zt.AccessToken, nil
 	}
-	return z.AccessToken, nil
+	return zt.AccessToken, nil
 }
