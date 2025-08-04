@@ -63,7 +63,6 @@ func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAtt
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
-	fmt.Printf("Brevo payload: %s\n", string(b))
 	err = BrevoRequest(b)
 	if err != nil {
 		return fmt.Errorf("brevo request: %w", err)
