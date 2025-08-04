@@ -12,7 +12,7 @@ import (
 
 func ScheduleCheck(app *pocketbase.PocketBase) {
 	//Runs every 30 minutes
-	var now = time.Now().UTC()
+	var now = time.Now().UTC().Add(-1 * time.Minute) //give a minute leeway
 	var next30 = now.Add(30 * time.Minute).Format("2006-01-02 15:04:05")
 
 	var filter = "done = false && run_at <= '" + next30 + "' && run_at >= '" + now.Format("2006-01-02 15:04:05") + "'"
