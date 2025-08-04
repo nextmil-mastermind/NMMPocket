@@ -70,6 +70,7 @@ func main() {
 	go zoomcon.StartStatusAggregator(appCtx, statusIn)
 
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
+	app.Cron().Add("schedule_check", "0,30 * * * *", func() { lib.ScheduleCheck(app) })
 	app.Cron().MustAdd("student_zoom_reg", "0 12 * * 1", func() {
 		now := time.Now()
 		if !isFourthMonday(now) {
