@@ -11,6 +11,30 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
+// convertToEasternTime manually converts a UTC time to Eastern Time (EST/EDT)
+func convertToEasternTime(utcTime time.Time) time.Time {
+	year := utcTime.Year()
+
+	// Calculate DST start (second Sunday of March)
+	dstStart := time.Date(year, time.March, 1, 2, 0, 0, 0, time.UTC)
+	dstStart = dstStart.AddDate(0, 0, (14-int(dstStart.Weekday()))%7) // Second Sunday
+
+	// Calculate DST end (first Sunday of November)
+	dstEnd := time.Date(year, time.November, 1, 2, 0, 0, 0, time.UTC)
+	dstEnd = dstEnd.AddDate(0, 0, (7-int(dstEnd.Weekday()))%7) // First Sunday
+
+	// Determine if we're in daylight saving time
+	isDST := utcTime.After(dstStart) && utcTime.Before(dstEnd)
+
+	if isDST {
+		// EDT: UTC-4
+		return utcTime.Add(-4 * time.Hour)
+	} else {
+		// EST: UTC-5
+		return utcTime.Add(-5 * time.Hour)
+	}
+}
+
 func ScheduleCheck(app *pocketbase.PocketBase) {
 	//Runs every 30 minutes
 	var now = time.Now().UTC().Add(-1 * time.Minute) //give a minute leeway
@@ -179,11 +203,25 @@ func zoomStartLinkHelper(params Recipients, meeting zoomcon.Meeting, record *cor
 		paramMap["topic"] = meeting.Topic
 		paramMap["start_time"] = meeting.StartTime
 		fmt.Printf("Meeting start time raw: %s\n", meeting.StartTime)
-		//StartTime is in RFC3339 format, we can parse it and then convert it to EST MMM/DD/YYYY HH:MM AM/PM
+		//StartTime is in RFC3339 format, we can parse it and then convert it to EST/EDT MMM/DD/YYYY HH:MM AM/PM
 		if t, err := time.Parse(time.RFC3339, meeting.StartTime); err == nil {
-			loc, _ := time.LoadLocation("America/New_York")
-			paramMap["start_time_est"] = t.In(loc).Format("01/02/2006 03:04 PM") + " EST"
+			// Manually convert to Eastern Time (EST/EDT)
+			easternTime := convertToEasternTime(t)
+			// Determine if it's DST to show correct timezone abbreviation
+			year := t.Year()
+			dstStart := time.Date(year, time.March, 1, 2, 0, 0, 0, time.UTC)
+			dstStart = dstStart.AddDate(0, 0, (14-int(dstStart.Weekday()))%7)
+			dstEnd := time.Date(year, time.November, 1, 2, 0, 0, 0, time.UTC)
+			dstEnd = dstEnd.AddDate(0, 0, (7-int(dstEnd.Weekday()))%7)
+			isDST := t.After(dstStart) && t.Before(dstEnd)
+
+			if isDST {
+				paramMap["start_time_est"] = easternTime.Format("01/02/2006 03:04 PM") + " EDT"
+			} else {
+				paramMap["start_time_est"] = easternTime.Format("01/02/2006 03:04 PM") + " EST"
+			}
 		} else {
+			fmt.Printf("Failed to parse meeting start time: %v\n", err)
 			paramMap["start_time_est"] = meeting.StartTime // fallback to original
 		}
 		paramMap["link_expires_at"] = time.Now().Add(120 * time.Minute).Format("01/02/2006 03:04 PM")
