@@ -3,6 +3,9 @@ package lib
 import (
 	"os"
 	"time"
+
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 var (
@@ -71,4 +74,41 @@ type OrderData struct {
 	Address        *string // optional
 	Total          float64
 	Type           string // event type
+}
+
+// ScheduledJob represents a scheduled job in the system.
+type ScheduledJob struct {
+	Collection string          `json:"collection"`
+	Filter     string          `json:"filter"`
+	Function   string          `json:"function"`
+	RunAt      time.Time       `json:"run_at"`
+	Done       bool            `json:"done"`
+	LastRun    time.Time       `json:"last_run"`
+	Email      string          `json:"email_template"`
+	Params     *map[string]any `json:"params,omitempty"`
+	Record     *core.Record
+}
+
+func (s *ScheduledJob) MarkDone(app *pocketbase.PocketBase) error {
+	s.Done = true
+	s.LastRun = time.Now().UTC()
+	return app.Save(s.Record)
+}
+
+func (s *ScheduledJob) FromRecord(record *core.Record) {
+	s.Collection = record.GetString("collection")
+	s.Filter = record.GetString("filter")
+	s.Function = record.GetString("function")
+	runAt := record.GetDateTime("run_at")
+	s.RunAt = runAt.Time()
+	s.Done = record.GetBool("done")
+	lastRun := record.GetDateTime("last_run")
+	s.LastRun = lastRun.Time()
+	s.Email = record.GetString("email_template")
+	if params := record.Get("params"); params != nil {
+		if paramMap, ok := params.(map[string]any); ok {
+			s.Params = &paramMap
+		}
+	}
+	s.Record = record
 }

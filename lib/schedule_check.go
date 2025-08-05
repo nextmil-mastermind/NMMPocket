@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"nmmpocket/zoomcon"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
@@ -27,8 +28,8 @@ func ScheduleCheck(app *pocketbase.PocketBase) {
 		switch record.GetString("function") {
 		case "zoom_email_send":
 			taskErr = zoom_email_send(record, app)
-		case "other_function":
-			// call other function
+		case "zoom_admin_start_meeting":
+			taskErr = zoom_admin_start_meeting(record, app)
 		default:
 			// unknown function
 		}
@@ -49,20 +50,15 @@ func zoom_email_send(record *core.Record, app *pocketbase.PocketBase) error {
 	//grab the collection and filter from the record
 	collection := record.GetString("collection")
 	filter := record.GetString("filter")
-	emailId := record.GetString("email_template")
-	emailRecord, err := app.FindRecordById("email_basic", emailId)
-	if err != nil {
-		// handle error
-		return err
+	errs := app.ExpandRecord(record, []string{"email_template"}, nil)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to expand email_template: %v", errs)
 	}
+	emailRecord := record.ExpandedOne("email_template")
 	records, err := app.FindRecordsByFilter(collection, filter, "", 0, 0)
 	if err != nil {
 		// handle error
 		return err
-	}
-	if emailRecord == nil {
-		// handle error
-		return fmt.Errorf("email template not found")
 	}
 
 	// Fix: Initialize mainParams and properly handle the params
@@ -99,42 +95,6 @@ func zoom_email_send(record *core.Record, app *pocketbase.PocketBase) error {
 	return nil
 }
 
-type ScheduledJob struct {
-	Collection string          `json:"collection"`
-	Filter     string          `json:"filter"`
-	Function   string          `json:"function"`
-	RunAt      time.Time       `json:"run_at"`
-	Done       bool            `json:"done"`
-	LastRun    time.Time       `json:"last_run"`
-	Email      string          `json:"email_template"`
-	Params     *map[string]any `json:"params,omitempty"`
-	Record     *core.Record
-}
-
-func (s *ScheduledJob) MarkDone(app *pocketbase.PocketBase) error {
-	s.Done = true
-	s.LastRun = time.Now().UTC()
-	return app.Save(s.Record)
-}
-
-func (s *ScheduledJob) FromRecord(record *core.Record) {
-	s.Collection = record.GetString("collection")
-	s.Filter = record.GetString("filter")
-	s.Function = record.GetString("function")
-	runAt := record.GetDateTime("run_at")
-	s.RunAt = runAt.Time()
-	s.Done = record.GetBool("done")
-	lastRun := record.GetDateTime("last_run")
-	s.LastRun = lastRun.Time()
-	s.Email = record.GetString("email_template")
-	if params := record.Get("params"); params != nil {
-		if paramMap, ok := params.(map[string]any); ok {
-			s.Params = &paramMap
-		}
-	}
-	s.Record = record
-}
-
 func paramsHelper(record *core.Record) map[string]any {
 	mainParams := make(map[string]any)
 	if paramsRaw := record.Get("params"); paramsRaw != nil {
@@ -163,4 +123,71 @@ func paramsHelper(record *core.Record) map[string]any {
 		}
 	}
 	return mainParams
+}
+
+func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) error {
+	//We don't need to grab the collection or filter, just the record itself
+	errs := app.ExpandRecord(record, []string{"email_template"}, nil)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to expand email_template: %v", errs)
+	}
+	emailRecord := record.ExpandedOne("email_template")
+	type MeetingStartParams struct {
+		MeetingID    int64            `json:"meeting_id"`
+		OccurrenceID int64            `json:"occurrence_id"`
+		Emails       []map[string]any `json:"emails"`
+	}
+	var params MeetingStartParams
+	if p := record.Get("params"); p != nil {
+		err := record.UnmarshalJSONField("params", &params)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal params: %v", err)
+		}
+	} else {
+		return fmt.Errorf("no params found for zoom_admin_start_meeting job")
+	}
+	var zt zoomcon.ZOOM_TOKEN
+	_, err := zt.GetAccessToken()
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
+		return err
+	}
+	meeting, err := zt.GrabSingleOccurrence(params.MeetingID, params.OccurrenceID)
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab single occurrence: %v\n", err)
+		return err
+	}
+	var tos []Recipient
+	for _, em := range params.Emails {
+		to := Recipient{
+			Email:     fmt.Sprintf("%v", em["email"]),
+			Name:      fmt.Sprintf("%v", em["first_name"]) + " " + fmt.Sprintf("%v", em["last_name"]),
+			FirstName: fmt.Sprintf("%v", em["first_name"]),
+		}
+		paramMap := make(map[string]any)
+		paramMap["start_url"] = meeting.StartURL
+		paramMap["topic"] = meeting.Topic
+		paramMap["start_time"] = meeting.StartTime
+		fmt.Printf("Meeting start time raw: %s\n", meeting.StartTime)
+		//StartTime is in RFC3339 format, we can parse it and then convert it to EST MMM/DD/YYYY HH:MM AM/PM
+		if t, err := time.Parse(time.RFC3339, meeting.StartTime); err == nil {
+			loc, _ := time.LoadLocation("America/New_York")
+			paramMap["start_time_est"] = t.In(loc).Format("01/02/2006 03:04 PM") + " EST"
+		} else {
+			paramMap["start_time_est"] = meeting.StartTime // fallback to original
+		}
+		paramMap["link_expires_at"] = time.Now().Add(120 * time.Minute).Format("01/02/2006 03:04 PM")
+		paramMap["duration"] = meeting.Duration
+		to.Params = &paramMap
+		tos = append(tos, to)
+	}
+	subject := emailRecord.GetString("subject")
+	message := emailRecord.GetString("html")
+
+	err = EmailSender(tos, subject, message, nil, false)
+	if err != nil {
+		fmt.Printf("failed to send meeting start email: %v\n", err)
+		return err
+	}
+	return nil // placeholder for actual meeting start logic
 }

@@ -16,6 +16,12 @@ type MeetingOccurrence struct {
 	Duration     int       `json:"duration"`
 	Status       string    `json:"status"`
 }
+type Meeting struct {
+	StartURL  string `json:"start_url"`
+	Topic     string `json:"topic"`
+	StartTime string `json:"start_time"` //2022-03-25T07:29:29Z RFC3339
+	Duration  int    `json:"duration"`   // in minutes
+}
 
 type MemberReduced struct {
 	FirstName  string    `json:"first_name"`
