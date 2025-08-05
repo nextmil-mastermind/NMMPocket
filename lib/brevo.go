@@ -20,7 +20,7 @@ import (
 //   - ticketurl: optional ticket URL
 //
 // Returns an error if the email fails to send.
-func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAttachment, ticketurl bool) error {
+func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAttachment) error {
 
 	// Build messageVersions.
 	var messageVersions []MessageVersion
@@ -30,12 +30,16 @@ func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAtt
 			"email":      r.Email,
 			"first_name": r.FirstName,
 		}
+
 		if r.Params != nil {
 			maps.Copy(params, *r.Params)
 		}
 		mv := MessageVersion{
 			To:     []Contact{{Name: r.Name, Email: r.Email}},
 			Params: params,
+		}
+		if len(r.CC) > 0 {
+			mv.CC = r.CC
 		}
 		messageVersions = append(messageVersions, mv)
 	}

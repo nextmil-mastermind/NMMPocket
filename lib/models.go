@@ -26,8 +26,9 @@ type ReplyTo struct {
 }
 
 type MessageVersion struct {
-	To     []Contact      `json:"to"`
-	Params map[string]any `json:"params"`
+	To     []Contact        `json:"to"`
+	Params map[string]any   `json:"params"`
+	CC     []map[string]any `json:"cc,omitempty"`
 }
 
 type EmailData struct {
@@ -51,6 +52,7 @@ type Recipient struct {
 	Email     string
 	FirstName string
 	Params    *map[string]any
+	CC        []map[string]any // optional CC recipients
 }
 
 // Contact represents a sender, replyTo, or recipient in the request.

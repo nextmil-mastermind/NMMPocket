@@ -87,7 +87,7 @@ func zoom_email_send(record *core.Record, app *pocketbase.PocketBase) error {
 		to.Params = &paramMap
 		tos = append(tos, to)
 	}
-	err = EmailSender(tos, subject, message, nil, false)
+	err = EmailSender(tos, subject, message, nil)
 	if err != nil {
 		fmt.Printf("failed to send email: %v\n", err)
 		return err
@@ -136,6 +136,7 @@ func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) e
 		MeetingID    int64            `json:"meeting_id"`
 		OccurrenceID int64            `json:"occurrence_id"`
 		Emails       []map[string]any `json:"emails"`
+		CC           []map[string]any `json:"cc,omitempty"`
 	}
 	var params MeetingStartParams
 	if p := record.Get("params"); p != nil {
@@ -179,12 +180,15 @@ func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) e
 		paramMap["link_expires_at"] = time.Now().Add(120 * time.Minute).Format("01/02/2006 03:04 PM")
 		paramMap["duration"] = meeting.Duration
 		to.Params = &paramMap
+		if len(params.CC) > 0 {
+			to.CC = params.CC
+		}
 		tos = append(tos, to)
 	}
 	subject := emailRecord.GetString("subject")
 	message := emailRecord.GetString("html")
 
-	err = EmailSender(tos, subject, message, nil, false)
+	err = EmailSender(tos, subject, message, nil)
 	if err != nil {
 		fmt.Printf("failed to send meeting start email: %v\n", err)
 		return err
