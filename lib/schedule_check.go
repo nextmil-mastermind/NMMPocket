@@ -30,8 +30,12 @@ func ScheduleCheck(app *pocketbase.PocketBase) {
 			taskErr = zoom_email_send(record, app)
 		case "zoom_admin_start_meeting":
 			taskErr = zoom_admin_start_meeting(record, app)
+		case "zoom_admin_start_webinar":
+			taskErr = zoom_admin_start_webinar(record, app)
+		// Add more functions as needed
 		default:
 			// unknown function
+			fmt.Printf("Unknown scheduled job function: %s\n", record.GetString("function"))
 		}
 		if taskErr == nil {
 			record.Set("done", true)
@@ -126,17 +130,11 @@ func paramsHelper(record *core.Record) map[string]any {
 }
 
 func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) error {
-	//We don't need to grab the collection or filter, just the record itself
-	errs := app.ExpandRecord(record, []string{"email_template"}, nil)
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to expand email_template: %v", errs)
-	}
-	emailRecord := record.ExpandedOne("email_template")
+
 	type MeetingStartParams struct {
-		MeetingID    int64            `json:"meeting_id"`
-		OccurrenceID int64            `json:"occurrence_id"`
-		Emails       []map[string]any `json:"emails"`
-		CC           []map[string]any `json:"cc,omitempty"`
+		MeetingID    int64 `json:"meeting_id"`
+		OccurrenceID int64 `json:"occurrence_id"`
+		Recipients
 	}
 	var params MeetingStartParams
 	if p := record.Get("params"); p != nil {
@@ -158,6 +156,17 @@ func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) e
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab single occurrence: %v\n", err)
 		return err
 	}
+
+	return zoomStartLinkHelper(params.Recipients, meeting, record, app) // placeholder for actual meeting start logic
+}
+
+func zoomStartLinkHelper(params Recipients, meeting zoomcon.Meeting, record *core.Record, app *pocketbase.PocketBase) error {
+	//We don't need to grab the collection or filter, just the record itself
+	errs := app.ExpandRecord(record, []string{"email_template"}, nil)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to expand email_template: %v", errs)
+	}
+	emailRecord := record.ExpandedOne("email_template")
 	var tos []Recipient
 	for _, em := range params.Emails {
 		to := Recipient{
@@ -188,10 +197,39 @@ func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) e
 	subject := emailRecord.GetString("subject")
 	message := emailRecord.GetString("html")
 
-	err = EmailSender(tos, subject, message, nil)
+	err := EmailSender(tos, subject, message, nil)
 	if err != nil {
 		fmt.Printf("failed to send meeting start email: %v\n", err)
 		return err
 	}
-	return nil // placeholder for actual meeting start logic
+	return nil
+}
+func zoom_admin_start_webinar(record *core.Record, app *pocketbase.PocketBase) error {
+	// Placeholder for webinar start logic
+	type MeetingStartParams struct {
+		WebinarId  int64      `json:"webinar_id"`
+		Recipients Recipients `json:"recipients"`
+	}
+	var zt zoomcon.ZOOM_TOKEN
+	_, err := zt.GetAccessToken()
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
+		return err
+	}
+	var params MeetingStartParams
+	if p := record.Get("params"); p != nil {
+		err := record.UnmarshalJSONField("params", &params)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal params: %v", err)
+		}
+	} else {
+		return fmt.Errorf("no params found for zoom_admin_start_webinar job")
+	}
+	webinar, err := zt.GrabWebinar(params.WebinarId)
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab webinar: %v\n", err)
+		return err
+	}
+
+	return zoomStartLinkHelper(params.Recipients, webinar, record, app)
 }

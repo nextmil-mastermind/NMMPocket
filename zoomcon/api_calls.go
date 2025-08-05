@@ -214,3 +214,41 @@ func (zt *ZOOM_TOKEN) GrabSingleOccurrence(meetingID, occurrenceID int64) (Meeti
 	}
 	return Meeting{}, fmt.Errorf("error in response: %s", body)
 }
+
+func (zt *ZOOM_TOKEN) GrabWebinar(webinarID int64) (Meeting, error) {
+	url := fmt.Sprintf("https://api.zoom.us/v2/webinars/%d", webinarID)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to create request: %v\n", err)
+		return Meeting{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+zt.AccessToken)
+
+	res, err := client.Do(req)
+	if err != nil {
+		return Meeting{}, fmt.Errorf("HTTP request failed: %v", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(res.Body)
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return Meeting{}, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var webinar Meeting
+	if res.StatusCode == 200 {
+		err = json.Unmarshal(body, &webinar)
+		if err != nil {
+			return Meeting{}, fmt.Errorf("failed to unmarshal response body: %v", err)
+		}
+		return webinar, nil
+	}
+	return Meeting{}, fmt.Errorf("error in response: %s", body)
+}

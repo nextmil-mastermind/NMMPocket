@@ -114,3 +114,9 @@ func (s *ScheduledJob) FromRecord(record *core.Record) {
 	}
 	s.Record = record
 }
+
+// Recipients represents the email recipients for a scheduled job.
+type Recipients struct {
+	Emails []map[string]any `json:"emails"`
+	CC     []map[string]any `json:"cc,omitempty"`
+}
