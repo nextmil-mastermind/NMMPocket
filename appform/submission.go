@@ -44,9 +44,11 @@ func ReceivedSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) e
 	if err != nil {
 		return err
 	}
-	if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
-		//log the error
-		app.Logger().Error("Error sending to email scheduler", "error", err)
+	if success {
+		if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
+			//log the error
+			app.Logger().Error("Error sending to email scheduler", "error", err)
+		}
 	}
 	return e.JSON(http.StatusOK, "Application submitted successfully")
 }
@@ -75,6 +77,12 @@ func ReceivedSmallSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEve
 	err = app.Save(record)
 	if err != nil {
 		return err
+	}
+	if success {
+		if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
+			//log the error
+			app.Logger().Error("Error sending to email scheduler", "error", err)
+		}
 	}
 	return e.JSON(http.StatusOK, "Application submitted successfully")
 }
