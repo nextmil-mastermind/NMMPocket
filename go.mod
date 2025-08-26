@@ -11,16 +11,8 @@ require (
 	github.com/pocketbase/dbx v1.11.0
 	github.com/pocketbase/pocketbase v0.29.1
 	github.com/stripe/stripe-go/v81 v81.4.0
+	golang.org/x/net v0.42.0
 	golang.org/x/time v0.12.0
-)
-
-require (
-	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/olekukonko/errors v1.1.0 // indirect
-	github.com/olekukonko/ll v0.0.9 // indirect
-	github.com/olekukonko/tablewriter v1.0.9 // indirect
-	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 )
 
 require (
@@ -49,7 +41,6 @@ require (
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
 	golang.org/x/image v0.29.0 // indirect
-	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect

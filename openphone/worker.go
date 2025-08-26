@@ -52,8 +52,8 @@ func worker(ctx context.Context) {
 					}
 					// Create a timeout context for each job
 					jobCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					defer cancel() // Ensure cancel is always called
 					job.Do(jobCtx) // Try to process but don't wait too long
-					cancel()
 				default:
 					return
 				}
@@ -65,10 +65,10 @@ func worker(ctx context.Context) {
 			}
 			// Create a timeout context for each job
 			jobCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel() // Ensure cancel is always called
 
 			if err := limiter.Wait(jobCtx); err != nil {
 				fmt.Printf("[Phone-WORKER] Rate limiter wait failed: %v\n", err)
-				cancel()
 				if err == context.Canceled {
 					continue // Skip this job if context was canceled
 				}
@@ -79,7 +79,6 @@ func worker(ctx context.Context) {
 				// If OpenPhone signalled rate limit → re‑queue after delay
 				if strings.Contains(err.Error(), "rate limit exceeded") {
 					fmt.Printf("[Phone-WORKER] OpenPhone rate limit exceeded, requeueing job after 2s: %T\n", job)
-					cancel()
 					// Wait before requeueing to respect rate limits
 					select {
 					case <-time.After(2 * time.Second):
@@ -112,7 +111,6 @@ func worker(ctx context.Context) {
 			} else {
 				fmt.Printf("[Phone-WORKER] Job completed successfully\n")
 			}
-			cancel() // Clean up the job context
 		}
 	}
 }
