@@ -280,10 +280,8 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 	// Pre-compile the template once
 	temp := template.NewRegistry().LoadString(HTMLToText(emailRecord.GetString("html")))
 
-	// Track messages for completion (optional: could remove if fire-and-forget is preferred)
+	// Track messages for completion
 	var messageCount int
-	var successCount int
-	var errorCount int
 
 	for i, rec := range records {
 		errs := app.ExpandRecord(rec, []string{"member"}, nil)
@@ -310,60 +308,24 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 		text, err := temp.Render(paramMap)
 		if err != nil {
 			fmt.Printf("Failed to execute template for record %d: %v\n", i+1, err)
-			errorCount++
 			continue
 		}
 
-		if err != nil {
-			fmt.Printf("Failed to convert HTML to text for record %d: %v\n", i+1, err)
-			errorCount++
-			continue
-		}
-
-		// Create channels with buffer size of 1 to prevent blocking
-		respCh := make(chan openphone.MessageResponse, 1)
-		errCh := make(chan error, 1)
-
+		// Create and enqueue the message job
 		messageJob := openphone.MessageJob{
 			PhoneNumber: phoneNumber,
 			FromNumber:  fromNumber,
 			Content:     text,
-			RespCh:      respCh,
-			ErrCh:       errCh,
 		}
 
 		messageCount++
 
-		// Handle response asynchronously with proper cleanup
-		go func(jobID int, job openphone.MessageJob) {
-			defer func() {
-				// Close channels to prevent leaks
-				close(job.RespCh)
-				close(job.ErrCh)
-			}()
-
-			// Enqueue the job
-			openphone.Enqueue(job)
-
-			// Wait for response with timeout
-			select {
-			case resp := <-job.RespCh:
-				fmt.Printf("SMS %d sent successfully to %s: %v\n", jobID, job.PhoneNumber, resp)
-				successCount++
-			case err := <-job.ErrCh:
-				fmt.Printf("SMS %d failed to %s: %v\n", jobID, job.PhoneNumber, err)
-				errorCount++
-			case <-time.After(30 * time.Second):
-				fmt.Printf("SMS %d to %s timed out after 30 seconds\n", jobID, job.PhoneNumber)
-				errorCount++
-			}
-		}(i+1, messageJob)
+		// Simply enqueue the job - the worker will handle retries and errors
+		openphone.Enqueue(messageJob)
+		fmt.Printf("Enqueued SMS %d to %s\n", i+1, phoneNumber)
 	}
 
-	if errorCount > 0 {
-		fmt.Printf("Encountered %d errors during template processing\n", errorCount)
-	}
-
+	fmt.Printf("Successfully enqueued %d SMS messages\n", messageCount)
 	return nil
 }
 

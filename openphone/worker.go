@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -12,7 +13,7 @@ import (
 
 var (
 	queue   = make(chan Job, 500)                           // holds RegisterJob, StatusJob, etc.
-	limiter = rate.NewLimiter(rate.Every(time.Second/5), 1) // 5‑req/s with 1‑sec burst
+	limiter = rate.NewLimiter(rate.Every(time.Second/3), 1) // 3 req/s with 1 burst to be more conservative
 	httpC   = &http.Client{Timeout: 10 * time.Second}
 	APIKey  = "your_api_key_here"
 )
@@ -75,16 +76,41 @@ func worker(ctx context.Context) {
 			}
 
 			if err := job.Do(jobCtx); err != nil {
-				// If OpenPhone signalled per‑second overflow → re‑queue after 1 s
-				if err.Error() == "rate limit exceeded" {
-					fmt.Printf("[Phone-WORKER] OpenPhone rate limit exceeded, requeueing job after 1s: %T\n", job)
-					time.Sleep(time.Second)
-					Enqueue(job)
+				// If OpenPhone signalled rate limit → re‑queue after delay
+				if strings.Contains(err.Error(), "rate limit exceeded") {
+					fmt.Printf("[Phone-WORKER] OpenPhone rate limit exceeded, requeueing job after 2s: %T\n", job)
 					cancel()
+					// Wait before requeueing to respect rate limits
+					select {
+					case <-time.After(2 * time.Second):
+						Enqueue(job)
+						fmt.Printf("[Phone-WORKER] Job requeued due to rate limit\n")
+					case <-ctx.Done():
+						fmt.Printf("[Phone-WORKER] Context canceled while waiting to requeue job\n")
+						return
+					}
 					continue
 				}
-				fmt.Printf("[Phone-WORKER] Job failed with error: %v\n", err)
-				// TODO: add structured logging / DLQ for permanent failures
+
+				// Handle context deadline exceeded (timeout)
+				if strings.Contains(err.Error(), "context deadline exceeded") {
+					fmt.Printf("[Phone-WORKER] Job timed out, requeueing: %T\n", job)
+					// Requeue timeout jobs as well, but with a delay
+					select {
+					case <-time.After(5 * time.Second):
+						Enqueue(job)
+						fmt.Printf("[Phone-WORKER] Job requeued due to timeout\n")
+					case <-ctx.Done():
+						fmt.Printf("[Phone-WORKER] Context canceled while waiting to requeue timeout job\n")
+						return
+					}
+					continue
+				} else {
+					fmt.Printf("[Phone-WORKER] Job failed with permanent error: %v\n", err)
+					// Don't requeue permanent failures
+				}
+			} else {
+				fmt.Printf("[Phone-WORKER] Job completed successfully\n")
 			}
 			cancel() // Clean up the job context
 		}

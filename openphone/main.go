@@ -31,15 +31,20 @@ func SendMessage(ctx context.Context, phoneNumber, fromNumber, content string) (
 		return MessageResponse{}, err
 	}
 
+	// Check for rate limiting
+	if resp.StatusCode == 429 {
+		return MessageResponse{}, fmt.Errorf("rate limit exceeded")
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return MessageResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return MessageResponse{}, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	var messageResp struct {
 		Data MessageResponse `json:"data"`
 	}
 	if err := json.Unmarshal(resp.Body, &messageResp); err != nil {
-		return MessageResponse{}, err
+		return MessageResponse{}, fmt.Errorf("failed to unmarshal response: %w, body: %s", err, string(resp.Body))
 	}
 
 	return messageResp.Data, nil
@@ -75,18 +80,25 @@ func makeRequest(ctx context.Context, method, url string, payload io.Reader) (*A
 }
 
 func formatPhoneNumber(phone string) string {
+	// If the number already starts with +, return it as is
+	if strings.HasPrefix(phone, "+") {
+		return phone
+	}
+
 	// Remove all non-numeric characters
 	re := regexp.MustCompile(`\D`)
 	cleaned := re.ReplaceAllString(phone, "")
 
-	// If the number is already in E.164 format, return it
-	if strings.HasPrefix(cleaned, "+") {
-		return cleaned
-	}
 	// If the number starts with '1' and is 11 digits long, format it as +1XXXXXXXXXX
 	if strings.HasPrefix(cleaned, "1") && len(cleaned) == 11 {
 		return fmt.Sprintf("+%s", cleaned)
 	}
-	// Otherwise, format it as +1XXXXXXXXXX
+
+	// If it's 10 digits, assume it's a US number and add +1
+	if len(cleaned) == 10 {
+		return fmt.Sprintf("+1%s", cleaned)
+	}
+
+	// For other cases, add +1 prefix (assuming US numbers)
 	return fmt.Sprintf("+1%s", cleaned)
 }
