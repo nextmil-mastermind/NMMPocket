@@ -287,6 +287,9 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 		// Copy main params first
 		maps.Copy(paramMap, mainParams)
 		paramMap["join_url"] = rec.GetString("join_url")
+		paramMap["first_name"] = rec.GetString("first_name")
+		paramMap["last_name"] = rec.GetString("last_name")
+		paramMap["email"] = rec.GetString("email")
 
 		// Render the template with the record data
 		text, err := temp.Render(paramMap)
