@@ -417,8 +417,10 @@ func HTMLToText(s string) string {
 	out = collapseBlankLines(strings.TrimSpace(out))
 
 	// Optional: append links as footnotes
-	_ = linkStack // if you want:
-	// for i, link := range linkStack { out += fmt.Sprintf("\n[%d] %s", i+1, link) }
+	//_ = linkStack // if you want:
+	for i, link := range linkStack {
+		out += fmt.Sprintf("\n[%d] %s", i+1, link)
+	}
 
 	return out
 }
