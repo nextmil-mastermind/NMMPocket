@@ -277,7 +277,13 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 	var errorCount int
 
 	for i, rec := range records {
-		phoneNumber := fmt.Sprintf("%v", rec.Get("phone"))
+		errs := app.ExpandRecord(rec, []string{"member"}, nil)
+		if len(errs) > 0 {
+			fmt.Printf("failed to expand record %s: %v\n", rec.Id, errs)
+			return fmt.Errorf("failed to expand record %s: %v", rec.Id, errs)
+		}
+		member := rec.ExpandedOne("member")
+		phoneNumber := fmt.Sprintf("%v", member.Get("phone"))
 		if phoneNumber == "" || phoneNumber == "<nil>" {
 			fmt.Printf("Skipping record %d: empty phone number\n", i+1)
 			continue
@@ -287,9 +293,9 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 		// Copy main params first
 		maps.Copy(paramMap, mainParams)
 		paramMap["join_url"] = rec.GetString("join_url")
-		paramMap["first_name"] = rec.GetString("first_name")
-		paramMap["last_name"] = rec.GetString("last_name")
-		paramMap["email"] = rec.GetString("email")
+		paramMap["first_name"] = member.GetString("first_name")
+		paramMap["last_name"] = member.GetString("last_name")
+		paramMap["email"] = member.GetString("email")
 
 		// Render the template with the record data
 		text, err := temp.Render(paramMap)
