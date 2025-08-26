@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/template"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"golang.org/x/net/html"
 )
 
@@ -111,6 +112,14 @@ func paramsHelper(record *core.Record) map[string]any {
 		switch params := paramsRaw.(type) {
 		case map[string]any:
 			maps.Copy(mainParams, params)
+		case types.JSONRaw:
+			// Handle types.JSONRaw from PocketBase
+			var paramMap map[string]any
+			if err := json.Unmarshal([]byte(params), &paramMap); err == nil {
+				maps.Copy(mainParams, paramMap)
+			} else {
+				fmt.Printf("Failed to unmarshal JSONRaw params: %v\n", err)
+			}
 		case []byte:
 			// Handle JSONRaw as bytes
 			var paramMap map[string]any
