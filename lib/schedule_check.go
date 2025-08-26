@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"nmmpocket/openphone"
 	"nmmpocket/zoomcon"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/template"
+	"golang.org/x/net/html"
 )
 
 func ScheduleCheck(app *pocketbase.PocketBase) {
@@ -32,6 +36,8 @@ func ScheduleCheck(app *pocketbase.PocketBase) {
 			taskErr = zoom_admin_start_meeting(record, app)
 		case "zoom_admin_start_webinar":
 			taskErr = zoom_admin_start_webinar(record, app)
+		case "zoom_sms_send":
+			taskErr = zoom_sms_send(record, app)
 		// Add more functions as needed
 		default:
 			// unknown function
@@ -236,4 +242,204 @@ func zoom_admin_start_webinar(record *core.Record, app *pocketbase.PocketBase) e
 	}
 
 	return zoomStartLinkHelper(params.Recipients, webinar, record, app)
+}
+
+func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
+	//grab the collection and filter from the record
+	collection := record.GetString("collection")
+	filter := record.GetString("filter")
+	errs := app.ExpandRecord(record, []string{"email_template"}, nil)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to expand email_template: %v", errs)
+	}
+	emailRecord := record.ExpandedOne("email_template")
+	records, err := app.FindRecordsByFilter(collection, filter, "", 0, 0)
+	if err != nil {
+		// handle error
+		return err
+	}
+
+	// Initialize mainParams and properly handle the params
+	mainParams := paramsHelper(record)
+
+	// Validate required from_number parameter
+	fromNumber, ok := mainParams["from_number"].(string)
+	if !ok || fromNumber == "" {
+		return fmt.Errorf("from_number parameter is required and must be a string")
+	}
+
+	// Pre-compile the template once
+	temp := template.NewRegistry().LoadString(HTMLToText(emailRecord.GetString("html")))
+
+	// Track messages for completion (optional: could remove if fire-and-forget is preferred)
+	var messageCount int
+	var successCount int
+	var errorCount int
+
+	for i, rec := range records {
+		phoneNumber := fmt.Sprintf("%v", rec.Get("phone"))
+		if phoneNumber == "" || phoneNumber == "<nil>" {
+			fmt.Printf("Skipping record %d: empty phone number\n", i+1)
+			continue
+		}
+
+		paramMap := make(map[string]any)
+		// Copy main params first
+		maps.Copy(paramMap, mainParams)
+		paramMap["join_url"] = rec.GetString("join_url")
+
+		// Render the template with the record data
+		text, err := temp.Render(paramMap)
+		if err != nil {
+			fmt.Printf("Failed to execute template for record %d: %v\n", i+1, err)
+			errorCount++
+			continue
+		}
+
+		if err != nil {
+			fmt.Printf("Failed to convert HTML to text for record %d: %v\n", i+1, err)
+			errorCount++
+			continue
+		}
+
+		// Create channels with buffer size of 1 to prevent blocking
+		respCh := make(chan openphone.MessageResponse, 1)
+		errCh := make(chan error, 1)
+
+		messageJob := openphone.MessageJob{
+			PhoneNumber: phoneNumber,
+			FromNumber:  fromNumber,
+			Content:     text,
+			RespCh:      respCh,
+			ErrCh:       errCh,
+		}
+
+		messageCount++
+
+		// Handle response asynchronously with proper cleanup
+		go func(jobID int, job openphone.MessageJob) {
+			defer func() {
+				// Close channels to prevent leaks
+				close(job.RespCh)
+				close(job.ErrCh)
+			}()
+
+			// Enqueue the job
+			openphone.Enqueue(job)
+
+			// Wait for response with timeout
+			select {
+			case resp := <-job.RespCh:
+				fmt.Printf("SMS %d sent successfully to %s: %v\n", jobID, job.PhoneNumber, resp)
+				successCount++
+			case err := <-job.ErrCh:
+				fmt.Printf("SMS %d failed to %s: %v\n", jobID, job.PhoneNumber, err)
+				errorCount++
+			case <-time.After(30 * time.Second):
+				fmt.Printf("SMS %d to %s timed out after 30 seconds\n", jobID, job.PhoneNumber)
+				errorCount++
+			}
+		}(i+1, messageJob)
+	}
+
+	if errorCount > 0 {
+		fmt.Printf("Encountered %d errors during template processing\n", errorCount)
+	}
+
+	return nil
+}
+
+func HTMLToText(s string) string {
+	// Parse the HTML
+	doc, err := html.Parse(strings.NewReader(s))
+	if err != nil {
+		return strings.TrimSpace(html.UnescapeString(s))
+	}
+
+	var b strings.Builder
+	var walk func(*html.Node)
+	newlineBlocks := map[string]bool{
+		"p": true, "div": true, "section": true, "article": true, "header": true, "footer": true,
+		"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+		"ul": true, "ol": true, "li": true, "br": true, "table": true, "tr": true,
+	}
+
+	linkStack := []string{} // collect links to append as footnotes if you want
+
+	walk = func(n *html.Node) {
+		switch n.Type {
+		case html.TextNode:
+			b.WriteString(n.Data)
+		case html.ElementNode:
+			name := strings.ToLower(n.Data)
+
+			// Line breaks before certain blocks (except first char)
+			if name == "br" {
+				b.WriteString("\n")
+			}
+
+			if name == "a" {
+				// capture href for optional footnotes
+				for _, a := range n.Attr {
+					if strings.EqualFold(a.Key, "href") && a.Val != "" {
+						linkStack = append(linkStack, a.Val)
+						break
+					}
+				}
+			}
+
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+
+			// Add bullet for list items
+			if name == "li" {
+				b.WriteString("\n")
+			}
+
+			// Newline after block-ish elements
+			if newlineBlocks[name] {
+				b.WriteString("\n")
+			}
+		default:
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+		}
+	}
+	walk(doc)
+
+	out := html.UnescapeString(b.String())
+
+	// Normalize whitespace/newlines
+	out = strings.ReplaceAll(out, "\r\n", "\n")
+	out = strings.ReplaceAll(out, "\r", "\n")
+	out = collapseBlankLines(strings.TrimSpace(out))
+
+	// Optional: append links as footnotes
+	_ = linkStack // if you want:
+	// for i, link := range linkStack { out += fmt.Sprintf("\n[%d] %s", i+1, link) }
+
+	return out
+}
+
+// Collapse 3+ blank lines to max 2, and shrink runs of spaces.
+func collapseBlankLines(s string) string {
+	lines := strings.Split(s, "\n")
+	var out []string
+	blankRun := 0
+	for _, ln := range lines {
+		if strings.TrimSpace(ln) == "" {
+			blankRun++
+			if blankRun > 2 {
+				continue
+			}
+			out = append(out, "")
+		} else {
+			blankRun = 0
+			// shrink internal multiple spaces
+			out = append(out, strings.Join(strings.Fields(ln), " "))
+		}
+	}
+	return strings.Join(out, "\n")
 }

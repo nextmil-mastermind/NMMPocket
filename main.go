@@ -10,11 +10,13 @@ import (
 	"nmmpocket/appform"
 	"nmmpocket/authentication"
 	"nmmpocket/lib"
+	"nmmpocket/openphone"
 	"nmmpocket/zoomcon"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/joho/godotenv"
 	"github.com/pocketbase/pocketbase"
@@ -69,6 +71,8 @@ func main() {
 	zoomcon.Start(appCtx) // Start the worker with the application context
 	go zoomcon.StartStatusAggregator(appCtx, statusIn)
 
+	openphone.Start(appCtx)
+
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
 	app.Cron().Add("schedule_check", "0,30 * * * *", func() { lib.ScheduleCheck(app) })
 	app.Cron().MustAdd("student_zoom_reg", "0 12 * * 1", func() {
@@ -102,7 +106,11 @@ func main() {
 				return apis.NewNotFoundError("User not found.", err)
 			}
 			// start the registration flow
-			options, sessionData, err := webAuthn.BeginRegistration(user)
+			options, sessionData, err := webAuthn.BeginRegistration(user,
+				webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred),
+				webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
+					UserVerification: protocol.VerificationPreferred,
+				}))
 			if err != nil {
 				return apis.NewBadRequestError("Failed to start registration flow.", err)
 			}
