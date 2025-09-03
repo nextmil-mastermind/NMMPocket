@@ -299,7 +299,7 @@ func zoom_sms_send(record *core.Record, app *pocketbase.PocketBase) error {
 		paramMap := make(map[string]any)
 		// Copy main params first
 		maps.Copy(paramMap, mainParams)
-		paramMap["join_url"] = rec.GetString("join_url")
+		paramMap["join_url"] = "https://pocket.nextmil.org/z/m/" + rec.Id
 		paramMap["first_name"] = member.GetString("first_name")
 		paramMap["last_name"] = member.GetString("last_name")
 		paramMap["email"] = member.GetString("email")
