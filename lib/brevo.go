@@ -21,6 +21,23 @@ import (
 //
 // Returns an error if the email fails to send.
 func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAttachment) error {
+	return EmailSenderFrom(
+		Contact{
+			Name:  os.Getenv("SENDER_NAME"),
+			Email: os.Getenv("SENDER_EMAIL"),
+		},
+		Contact{
+			Name:  os.Getenv("REPLY_NAME"),
+			Email: os.Getenv("REPLY_EMAIL"),
+		},
+		to,
+		subject,
+		message,
+		attachment,
+	)
+}
+
+func EmailSenderFrom(from Contact, replyTo Contact, to []Recipient, subject, message string, attachment *[]BrevoAttachment) error {
 
 	// Build messageVersions.
 	var messageVersions []MessageVersion
@@ -46,14 +63,8 @@ func EmailSender(to []Recipient, subject, message string, attachment *[]BrevoAtt
 
 	// Build the complete payload.
 	payload := EmailData{
-		Sender: Contact{
-			Name:  os.Getenv("SENDER_NAME"),
-			Email: os.Getenv("SENDER_EMAIL"),
-		},
-		ReplyTo: Contact{
-			Name:  os.Getenv("REPLY_NAME"),
-			Email: os.Getenv("REPLY_EMAIL"),
-		},
+		Sender:          from,
+		ReplyTo:         replyTo,
 		Subject:         subject,
 		HTMLContent:     message,
 		MessageVersions: messageVersions,

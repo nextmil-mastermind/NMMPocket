@@ -32,5 +32,5 @@ RUN chmod +x /pb/pocketbase
 
 EXPOSE 8080
 
-# start PocketBase with connectivity check
-CMD ping -c 3 smtp-relay.brevo.com && echo "SMTP connectivity verified" || echo "Warning: Cannot reach smtp-relay.brevo.com"; /pb/pocketbase serve --http=0.0.0.0:8080
+# start PocketBase
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080"]

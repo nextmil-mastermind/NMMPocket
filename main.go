@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"nmmpocket/appform"
 	"nmmpocket/authentication"
+	"nmmpocket/email"
 	"nmmpocket/lib"
 	"nmmpocket/openphone"
 	"nmmpocket/zoomcon"
@@ -65,6 +66,9 @@ func main() {
 	app := pocketbase.New()
 	appCtx, cancel = context.WithCancel(context.Background())
 	defer cancel()
+
+	// Register email mailer to replace pocketbase mailer with lib.EmailSender
+	email.RegisterMailer(app)
 
 	// Initialize Zoom components before the server starts
 	zoomcon.SetStatusChannel(statusIn)
