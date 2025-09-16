@@ -8,6 +8,7 @@ ADD /go.sum /build/
 ADD /authentication /build/authentication
 ADD *.go /build/
 ADD /zoomcon /build/zoomcon
+ADD /email /build/email
 WORKDIR /build
 RUN GOOS=linux GOARCH=amd64 go build -o pocketbase
 
