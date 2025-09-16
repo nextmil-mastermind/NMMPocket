@@ -17,7 +17,11 @@ FROM alpine:latest
 
 RUN apk add --no-cache \
     unzip \
-    ca-certificates
+    ca-certificates \
+    iputils
+
+# Test connectivity to Brevo SMTP relay
+RUN ping -c 3 smtp-relay.brevo.com || echo "Warning: Cannot reach smtp-relay.brevo.com"
 
 # Create a directory for PocketBase
 RUN mkdir -p /pb
