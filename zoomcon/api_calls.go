@@ -110,7 +110,12 @@ func RegisterWebinar(ctx context.Context, webinarID string, person ZoomPerson) (
 }
 
 func RegisterMeeting(ctx context.Context, meetingID string, occurrenceID string, person ZoomPerson) (RegisterWebinarResponse, error) {
-	url := ZOOM_URL_BASE + "meetings/" + meetingID + "/registrants?occurrence_ids=" + occurrenceID
+	var url string
+	if occurrenceID != "" {
+		url = ZOOM_URL_BASE + "meetings/" + meetingID + "/registrants?occurrence_ids=" + occurrenceID
+	} else {
+		url = ZOOM_URL_BASE + "meetings/" + meetingID + "/registrants"
+	}
 
 	payload := strings.NewReader(fmt.Sprintf(`{
         "first_name": "%s",
@@ -175,6 +180,43 @@ func UpdateRegistrantStatus(ctx context.Context, eventID string, registrants []R
 		return errors.New("failed to update registrant status")
 	}
 	return nil
+}
+func (zt *ZOOM_TOKEN) GrabMeeting(meetingID string) (Meeting, error) {
+	url := "https://api.zoom.us/v2/meetings/" + meetingID
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to create request: %v\n", err)
+		return Meeting{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+zt.AccessToken)
+
+	res, err := client.Do(req)
+	if err != nil {
+		return Meeting{}, fmt.Errorf("HTTP request failed: %v", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(res.Body)
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return Meeting{}, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var meeting Meeting
+	if res.StatusCode == 200 {
+		err = json.Unmarshal(body, &meeting)
+		if err != nil {
+			return Meeting{}, fmt.Errorf("failed to unmarshal response body: %v", err)
+		}
+		return meeting, nil
+	}
+	return Meeting{}, fmt.Errorf("error in response: %s", body)
 }
 
 func (zt *ZOOM_TOKEN) GrabSingleOccurrence(meetingID, occurrenceID int64) (Meeting, error) {

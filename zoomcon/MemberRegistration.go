@@ -25,9 +25,9 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
 		return err
 	}
-	meeting, err := zt.GrabMeetingOccurrences()
+	MeetingOccurrence, err := zt.GrabMeetingOccurrences()
 	if err != nil {
-		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab meeting occurences: %v\n", err)
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab meeting occurrences: %v\n", err)
 		return err
 	}
 	members, err := getMembers(app)
@@ -36,11 +36,24 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 		return err
 	}
 	zoomMeeting := os.Getenv("MemberMeeting")
+	var meeting Meeting
+	meeting.StartTime = MeetingOccurrence.StartTime.Format(time.RFC3339)
+	meeting.Duration = MeetingOccurrence.Duration
+
+	return MemberMeetingRegistration(members, meeting, MeetingOccurrence.OccurrenceId, zoomMeeting, app)
+}
+
+func MemberMeetingRegistration(members []MemberReduced, meeting Meeting, occurrence_id, zoomMeeting string, app *pocketbase.PocketBase) error {
 	eRespCh := make(chan RegistrationResult, len(members))
 	eErrCh := make(chan error, len(members))
 
+	startTime, err := time.Parse(time.RFC3339, meeting.StartTime)
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to parse meeting start time: %v\n", err)
+		return err
+	}
 	// Calculate end time once since it's the same for all members
-	endTime := meeting.StartTime.Add(time.Duration(meeting.Duration) * time.Minute)
+	endTime := startTime.Add(time.Duration(meeting.Duration) * time.Minute)
 
 	// Create a slice to store successful registrations
 	var successfulRegistrations []RegistrationResult
@@ -49,7 +62,7 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 		go func(p MemberReduced) {
 			Enqueue(RegisterMeetingJob{
 				MeetingID:    zoomMeeting,
-				OccurrenceID: meeting.OccurrenceId,
+				OccurrenceID: occurrence_id,
 				Person:       ZoomPerson{FirstName: p.FirstName, LastName: p.LastName, Email: p.Email, Phone: p.Phone},
 				RespCh:       eRespCh,
 				ErrCh:        eErrCh,
@@ -81,7 +94,7 @@ func RegisterMembers(app *pocketbase.PocketBase) error {
 			registration := MemberRegistration{
 				MemberID:  memberID,
 				JoinURL:   resp.Response.JoinURL,
-				StartTime: meeting.StartTime,
+				StartTime: startTime,
 				EndTime:   endTime,
 				Title:     resp.Response.Topic,
 			}

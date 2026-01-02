@@ -39,6 +39,8 @@ func ScheduleCheck(app *pocketbase.PocketBase) {
 			taskErr = zoom_admin_start_webinar(record, app)
 		case "zoom_sms_send":
 			taskErr = zoom_sms_send(record, app)
+		case "zoom_special_register_meeting":
+			taskErr = zoom_special_register_meeting(record, app)
 		// Add more functions as needed
 		default:
 			// unknown function
@@ -424,4 +426,46 @@ func collapseBlankLines(s string) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+func zoom_special_register_meeting(record *core.Record, app *pocketbase.PocketBase) error {
+	// Placeholder for webinar start logic
+	type MeetingRegisterParams struct {
+		MeetingId      string `json:"meeting_id"`
+		CollectionName string `json:"collection_name"`
+		Filter         string `json:"filter"`
+	}
+	var zt zoomcon.ZOOM_TOKEN
+	_, err := zt.GetAccessToken()
+	if err != nil {
+		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
+		return err
+	}
+	var params MeetingRegisterParams
+	if p := record.Get("params"); p != nil {
+		err := record.UnmarshalJSONField("params", &params)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal params: %v", err)
+		}
+	} else {
+		return fmt.Errorf("no params found for zoom_special_register_meeting job")
+	}
+	meeting, err := zt.GrabMeeting(params.MeetingId)
+	if err != nil {
+		return err
+	}
+	records, err := app.FindRecordsByFilter(params.CollectionName, params.Filter, "", 0, 0)
+	if err != nil {
+		// handle error
+		return err
+	}
+	//convert records to MemberReduced array
+	var members []zoomcon.MemberReduced
+	for _, rec := range records {
+		var member zoomcon.MemberReduced
+		member.FromRecord(rec)
+		members = append(members, member)
+	}
+	zoomcon.MemberMeetingRegistration(members, meeting, "", params.MeetingId, app)
+	return nil
 }
