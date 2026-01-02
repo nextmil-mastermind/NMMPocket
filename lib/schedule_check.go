@@ -432,7 +432,6 @@ func zoom_special_register_meeting(record *core.Record, app *pocketbase.PocketBa
 	// Placeholder for webinar start logic
 	type MeetingRegisterParams struct {
 		MeetingId string `json:"meeting_id"`
-		Filter    string `json:"filter"`
 	}
 	var zt zoomcon.ZOOM_TOKEN
 	_, err := zt.GetAccessToken()
@@ -453,7 +452,7 @@ func zoom_special_register_meeting(record *core.Record, app *pocketbase.PocketBa
 	if err != nil {
 		return err
 	}
-	records, err := app.FindRecordsByFilter(record.GetString("collection"), params.Filter, "", 0, 0)
+	records, err := app.FindRecordsByFilter(record.GetString("collection"), record.GetString("filter"), "", 0, 0)
 	if err != nil {
 		// handle error
 		return err
