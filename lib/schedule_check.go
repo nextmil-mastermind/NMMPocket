@@ -149,8 +149,8 @@ func paramsHelper(record *core.Record) map[string]any {
 func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) error {
 
 	type MeetingStartParams struct {
-		MeetingID    int64 `json:"meeting_id"`
-		OccurrenceID int64 `json:"occurrence_id"`
+		MeetingID    int64  `json:"meeting_id"`
+		OccurrenceID *int64 `json:"occurrence_id,omitempty"`
 		Recipients
 	}
 	var params MeetingStartParams
@@ -168,7 +168,15 @@ func zoom_admin_start_meeting(record *core.Record, app *pocketbase.PocketBase) e
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to get access token: %v\n", err)
 		return err
 	}
-	meeting, err := zt.GrabSingleOccurrence(params.MeetingID, params.OccurrenceID)
+
+	var meeting zoomcon.Meeting
+	if params.OccurrenceID != nil {
+		meeting, err = zt.GrabSingleOccurrence(params.MeetingID, *params.OccurrenceID)
+	} else {
+		// When no occurrence_id is provided, grab the meeting directly
+		meetingIdString := fmt.Sprintf("%d", params.MeetingID)
+		meeting, err = zt.GrabMeeting(meetingIdString)
+	}
 	if err != nil {
 		fmt.Printf("[DEBUG-ZOOM-API] Failed to grab single occurrence: %v\n", err)
 		return err
