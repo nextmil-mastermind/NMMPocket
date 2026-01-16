@@ -2,11 +2,15 @@ package lib
 
 import (
 	"fmt"
+	"log"
+	"strconv"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/checkout/session"
 	"github.com/stripe/stripe-go/v81/customer"
 	"github.com/stripe/stripe-go/v81/paymentintent"
 )
@@ -144,4 +148,144 @@ func save_card(email string, paymentID string, last4 string) error {
 		return fmt.Errorf("failed to save card: %w", err)
 	}
 	return nil
+}
+
+func generate_link_invoice(e *core.RequestEvent) error {
+	if e.Auth.Collection().Name != "members" {
+		return e.JSON(403, map[string]string{"error": "Unauthorized"})
+	}
+	//invoice id from path
+	invoiceID := e.Request.PathValue("invoiceID")
+	record, err := e.App.FindRecordById("invoices", invoiceID)
+	if err != nil {
+		return e.HTML(404, "<h1>Invoice not found</h1>")
+	}
+	if record.GetBool("paid") {
+		return e.HTML(200, "<h1>Invoice has already been paid</h1>")
+	}
+	//check if invoice has been updated in the last 12 hours
+	//redirect user to session_url(if its not empty) else create a new session url
+	updatedAt := record.GetDateTime("updated")
+	if time.Since(updatedAt.Time()) < 12*time.Hour {
+		sessionURL := record.GetString("session_url")
+		if sessionURL != "" {
+			return e.Redirect(302, sessionURL)
+		}
+	}
+	paySession, err := generateSession(record)
+	if err != nil {
+		log.Printf("Error generating session: %v", err)
+		return e.JSON(500, map[string]string{"error": "Failed to generate payment session"})
+	}
+	record.Set("session_url", paySession.URL)
+	record.Set("session", paySession.ID)
+	err = e.App.Save(record)
+	if err != nil {
+		log.Printf("Error saving invoice record: %v", err)
+		return e.JSON(500, map[string]string{"error": "Failed to save invoice session"})
+	}
+	return e.Redirect(302, paySession.URL)
+}
+
+func generateSession(invoice *core.Record) (*stripe.CheckoutSession, error) {
+	// Check if customer exists based on the invoice email.
+	email := invoice.GetString("email")
+	custParams := &stripe.CustomerListParams{
+		Email: stripe.String(email),
+	}
+	custParams.Limit = stripe.Int64(1)
+	ci := customer.List(custParams)
+	var cust *stripe.Customer
+	if ci.Next() {
+		cust = ci.Customer()
+	} else {
+		// Create a new customer.
+		name := invoice.GetString("name")
+		createParams := &stripe.CustomerParams{
+			Email: stripe.String(email),
+			Name:  stripe.String(name),
+		}
+		var err error
+		cust, err = customer.New(createParams)
+		if err != nil {
+			log.Printf("Error creating customer: %v", err)
+			return nil, err
+		}
+	}
+
+	// Convert invoice amount to the proper unit.
+	// Assumes invoice["amount"] is either string or a float64.
+	var unitAmount int64
+	switch v := invoice.Get("amount").(type) {
+	case string:
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			unitAmount = int64(f * 100)
+		}
+	case float64:
+		unitAmount = int64(v * 100)
+	default:
+		unitAmount = 0
+	}
+
+	// Build the checkout session parameters.
+	// Retrieve additional invoice details.
+	invoiceName := invoice.GetString("invoicename")
+	description := invoice.GetString("description")
+	invoiceType := invoice.GetString("type")
+	sessionParams := &stripe.CheckoutSessionParams{
+		PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency:   stripe.String("usd"),
+					UnitAmount: stripe.Int64(unitAmount),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name:        stripe.String(invoiceName),
+						Description: stripe.String(description),
+					},
+				},
+				Quantity: stripe.Int64(1),
+			},
+		},
+		BillingAddressCollection: stripe.String("required"),
+		Customer:                 stripe.String(cust.ID),
+		Mode:                     stripe.String("payment"),
+		Metadata: map[string]string{
+			"type": "invoice",
+		},
+	}
+
+	// For "standard" invoices, enable saving the payment method. Otherwise, set up for off-session payments.
+	if invoiceType == "" || invoiceType == "standard" {
+		sessionParams.SavedPaymentMethodOptions = &stripe.CheckoutSessionSavedPaymentMethodOptionsParams{
+			PaymentMethodSave: stripe.String("enabled"),
+		}
+	} else {
+		sessionParams.PaymentIntentData = &stripe.CheckoutSessionPaymentIntentDataParams{
+			SetupFutureUsage: stripe.String("off_session"),
+		}
+	}
+
+	sessionParams.SuccessURL = stripe.String("https://nextmilmastermind.com/thank-you")
+	sessionParams.CancelURL = stripe.String("https://nextmilmastermind.com")
+
+	paySession, err := session.New(sessionParams)
+	if err != nil {
+		log.Printf("Error creating checkout session: %v", err)
+		return nil, err
+	}
+
+	return paySession, nil
+	/*pb.UpdateInvoice(invoiceID, updateData)
+
+	response := map[string]any{"status": "success"}
+	if sendDataback {
+		response["invoice"] = invoice
+	}
+	if isEmbedded {
+		response["clientsecret"] = paySession.ClientSecret
+	} else {
+		response["url"] = paySession.URL
+	}
+	return response*/
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 	"github.com/stripe/stripe-go/v81"
@@ -16,7 +17,7 @@ import (
 
 // Register a stripe webhook
 func RegisterStripeWebhook(sr *router.Router[*core.RequestEvent], app *pocketbase.PocketBase) {
-
+	sr.GET("/stripe/invoice/{invoiceID}", generate_link_invoice).Bind(apis.RequireAuth())
 	sr.POST("/stripe/webhook", func(e *core.RequestEvent) error {
 		event := &stripe.Event{}
 
