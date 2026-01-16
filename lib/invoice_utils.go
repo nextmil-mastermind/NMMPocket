@@ -151,9 +151,6 @@ func save_card(email string, paymentID string, last4 string) error {
 }
 
 func generate_link_invoice(e *core.RequestEvent) error {
-	if e.Auth.Collection().Name != "members" {
-		return e.JSON(403, map[string]string{"error": "Unauthorized"})
-	}
 	//invoice id from path
 	invoiceID := e.Request.PathValue("invoiceID")
 	record, err := e.App.FindRecordById("invoices", invoiceID)
