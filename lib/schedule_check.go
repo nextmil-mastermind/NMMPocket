@@ -439,7 +439,8 @@ func collapseBlankLines(s string) string {
 func zoom_special_register_meeting(record *core.Record, app *pocketbase.PocketBase) error {
 	// Placeholder for webinar start logic
 	type MeetingRegisterParams struct {
-		MeetingId string `json:"meeting_id"`
+		MeetingId  string `json:"meeting_id"`
+		Occurrence string `json:"occurrence,omitempty"`
 	}
 	var zt zoomcon.ZOOM_TOKEN
 	_, err := zt.GetAccessToken()
@@ -456,9 +457,27 @@ func zoom_special_register_meeting(record *core.Record, app *pocketbase.PocketBa
 	} else {
 		return fmt.Errorf("no params found for zoom_special_register_meeting job")
 	}
-	meeting, err := zt.GrabMeeting(params.MeetingId)
-	if err != nil {
-		return err
+	var meeting zoomcon.Meeting
+	if params.Occurrence != "" {
+		var occurrence int64
+		var meetingid int64
+		_, err := fmt.Sscanf(params.Occurrence, "%d", &occurrence)
+		if err != nil {
+			return fmt.Errorf("invalid occurrence id: %v", err)
+		}
+		_, err = fmt.Sscanf(params.MeetingId, "%d", &meetingid)
+		if err != nil {
+			return fmt.Errorf("invalid meeting id: %v", err)
+		}
+		meeting, err = zt.GrabSingleOccurrence(meetingid, occurrence)
+		if err != nil {
+			return err
+		}
+	} else {
+		meeting, err = zt.GrabMeeting(params.MeetingId)
+		if err != nil {
+			return err
+		}
 	}
 	records, err := app.FindRecordsByFilter(record.GetString("collection"), record.GetString("filter"), "", 0, 0)
 	if err != nil {
