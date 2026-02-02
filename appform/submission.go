@@ -144,6 +144,10 @@ func SentToGHL(submission Application, small bool) error {
 	if err != nil {
 		return err
 	}
+	err = ghlstart.AddContactToWorkflow(contact["id"].(string), "d39874d9-4583-4f5c-a99e-f092a3840281")
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
