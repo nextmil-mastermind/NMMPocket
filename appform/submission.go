@@ -39,6 +39,7 @@ func ReceivedSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) e
 	record.Set("terms", submission.Terms)
 	record.Set("human", success)
 	record.Set("type", "full")
+	submission.Human = &success
 	err = app.Save(record)
 	if err != nil {
 		return err
@@ -73,6 +74,7 @@ func ReceivedSmallSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEve
 	record.Set("phone", submission.Phone)
 	record.Set("type", "small")
 	record.Set("human", success)
+	submission.Human = &success
 	err = app.Save(record)
 	if err != nil {
 		return err
@@ -111,13 +113,16 @@ func SentToGHL(submission Application, small bool) error {
 	}
 	//lets write a sentence that says if the system determined this was a human submission
 	isHumanMessage := ""
+	workflowId := "d39874d9-4583-4f5c-a99e-f092a3840281"
 	if submission.Human != nil {
 		if *submission.Human {
 			isHumanMessage = "The system determined this was a human submission."
 		} else {
+			workflowId = "0deb5c98-e0f0-4a6b-b096-d017191ff45e"
 			isHumanMessage = "The system determined this was NOT a human submission."
 		}
 	} else {
+		workflowId = "0deb5c98-e0f0-4a6b-b096-d017191ff45e"
 		isHumanMessage = "Human verification status unknown."
 	}
 	now := time.Now()
@@ -147,7 +152,7 @@ func SentToGHL(submission Application, small bool) error {
 	if err != nil {
 		return err
 	}
-	err = ghlstart.AddContactToWorkflow(contact["id"].(string), "d39874d9-4583-4f5c-a99e-f092a3840281")
+	err = ghlstart.AddContactToWorkflow(contact["id"].(string), workflowId)
 	if err != nil {
 		return err
 	}
