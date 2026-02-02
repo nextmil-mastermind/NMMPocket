@@ -111,10 +111,14 @@ func SentToGHL(submission Application, small bool) error {
 	}
 	//lets write a sentence that says if the system determined this was a human submission
 	isHumanMessage := ""
-	if *submission.Human {
-		isHumanMessage = "The system determined this was a human submission."
+	if submission.Human != nil {
+		if *submission.Human {
+			isHumanMessage = "The system determined this was a human submission."
+		} else {
+			isHumanMessage = "The system determined this was NOT a human submission."
+		}
 	} else {
-		isHumanMessage = "The system determined this was NOT a human submission."
+		isHumanMessage = "Human verification status unknown."
 	}
 	now := time.Now()
 	dueDate := now.Add(48 * time.Hour).Format(time.RFC3339)
