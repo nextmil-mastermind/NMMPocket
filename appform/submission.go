@@ -134,11 +134,14 @@ func SentToGHL(submission Application, small bool) error {
 		task.Body += "\nReferred By: " + *submission.ReferredBy
 	}
 	if small {
-		task.Body = "Follow up with " + submission.FirstName + " " + submission.LastName +
-			" regarding their quick application as that one doesn't contain any additional details.\n" + isHumanMessage
+		task.Body += "\nThis was a small application submission, so we are missing address, company, and website info."
 	} else {
-		task.Body = "Follow up with " + submission.FirstName + " " + submission.LastName +
-			" regarding their full application.\n" + isHumanMessage
+		task.Body += "\nMessage: " + func() string {
+			if submission.Message != nil {
+				return *submission.Message
+			}
+			return "No message provided."
+		}() + "\n"
 	}
 	err = ghlstart.AddTask(contact["id"].(string), task)
 	if err != nil {
