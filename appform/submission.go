@@ -126,6 +126,9 @@ func SentToGHL(submission Application, small bool) error {
 		Completed:  false,
 		AssignedTo: "ikUTBqoNOkbLPMyCaLcN",
 	}
+	if submission.ReferredBy != nil && *submission.ReferredBy != "" {
+		task.Body += "\nReferred By: " + *submission.ReferredBy
+	}
 	if small {
 		task.Body = "Follow up with " + submission.FirstName + " " + submission.LastName +
 			" regarding their quick application as that one doesn't contain any additional details.\n" + isHumanMessage
