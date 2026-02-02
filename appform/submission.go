@@ -1,12 +1,11 @@
 package appform
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
+	"nmmpocket/ghl"
 	"os"
+	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -45,9 +44,9 @@ func ReceivedSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEvent) e
 		return err
 	}
 	if success {
-		if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
+		if err := SentToGHL(submission.ToApplication(), false); err != nil {
 			//log the error
-			app.Logger().Error("Error sending to email scheduler", "error", err)
+			app.Logger().Error("Error sending to GHL", "error", err)
 		}
 	}
 	return e.JSON(http.StatusOK, "Application submitted successfully")
@@ -79,15 +78,70 @@ func ReceivedSmallSubmissionRoute(app *pocketbase.PocketBase, e *core.RequestEve
 		return err
 	}
 	if success {
-		if err := SendToEmailScheduler(submission.ToApplication()); err != nil {
+		if err := SentToGHL(submission.ToApplication(), true); err != nil {
 			//log the error
-			app.Logger().Error("Error sending to email scheduler", "error", err)
+			app.Logger().Error("Error sending to GHL", "error", err)
 		}
 	}
 	return e.JSON(http.StatusOK, "Application submitted successfully")
 }
 
-func SendToEmailScheduler(submission Application) error {
+func SentToGHL(submission Application, small bool) error {
+	ghlstart := ghl.GoHighLevelRequest{
+		AccessToken: os.Getenv("GHL_Token"),
+		LocationId:  os.Getenv("GHL_Location"),
+	}
+	contactData := map[string]any{
+		"firstName": submission.FirstName,
+		"lastName":  submission.LastName,
+		"email":     submission.EmailAddress,
+		"phone":     submission.Phone,
+	}
+	if !small {
+		contactData["company"] = submission.Company
+		contactData["address"] = submission.Address
+		contactData["city"] = submission.City
+		contactData["state"] = submission.State
+		contactData["zip"] = submission.Zip
+		contactData["website"] = submission.Website
+	}
+	contact, err := ghlstart.UpsertContact(contactData)
+	if err != nil {
+		return err
+	}
+	//lets write a sentence that says if the system determined this was a human submission
+	isHumanMessage := ""
+	if *submission.Human {
+		isHumanMessage = "The system determined this was a human submission."
+	} else {
+		isHumanMessage = "The system determined this was NOT a human submission."
+	}
+	now := time.Now()
+	dueDate := now.Add(48 * time.Hour).Format(time.RFC3339)
+	task := ghl.Task{
+		Title: "Follow up with application",
+		Body: "Follow up with " + submission.FirstName + " " + submission.LastName +
+			" regarding their application.\n" + isHumanMessage,
+		DueDate:    dueDate,
+		Completed:  false,
+		AssignedTo: "ikUTBqoNOkbLPMyCaLcN",
+	}
+	if small {
+		task.Body = "Follow up with " + submission.FirstName + " " + submission.LastName +
+			" regarding their quick application as that one doesn't contain any additional details.\n" + isHumanMessage
+	} else {
+		task.Body = "Follow up with " + submission.FirstName + " " + submission.LastName +
+			" regarding their full application.\n" + isHumanMessage
+	}
+	err = ghlstart.AddTask(contact["id"].(string), task)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/*func SendToEmailScheduler(submission Application) error {
 	//Create a JWT token with the submission id and the email address
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"submission_id": submission.ID,
@@ -116,3 +170,4 @@ func SendToEmailScheduler(submission Application) error {
 
 	return nil
 }
+*/
