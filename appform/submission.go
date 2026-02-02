@@ -102,7 +102,7 @@ func SentToGHL(submission Application, small bool) error {
 		contactData["address1"] = submission.Address
 		contactData["city"] = submission.City
 		contactData["state"] = submission.State
-		contactData["zip"] = submission.Zip
+		contactData["postalCode"] = submission.Zip
 		contactData["website"] = submission.Website
 	}
 	contact, err := ghlstart.UpsertContact(contactData)
