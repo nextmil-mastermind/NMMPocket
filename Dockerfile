@@ -2,6 +2,7 @@ FROM golang:1.24-alpine as builder
 RUN mkdir /build
 ADD /openphone /build/openphone
 ADD /lib /build/lib
+ADD /ghl /build/ghl
 ADD /appform /build/appform
 ADD /go.mod /build/
 ADD /go.sum /build/
