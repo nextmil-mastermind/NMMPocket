@@ -98,8 +98,8 @@ func SentToGHL(submission Application, small bool) error {
 		"phone":     submission.Phone,
 	}
 	if !small {
-		contactData["company"] = submission.Company
-		contactData["address"] = submission.Address
+		contactData["companyName"] = submission.Company
+		contactData["address1"] = submission.Address
 		contactData["city"] = submission.City
 		contactData["state"] = submission.State
 		contactData["zip"] = submission.Zip
