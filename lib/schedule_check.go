@@ -100,6 +100,8 @@ func zoom_email_send(record *core.Record, app *pocketbase.PocketBase) error {
 		to.Params = &paramMap
 		tos = append(tos, to)
 	}
+	//print out the tos for debugging, not the length
+	fmt.Printf("Recipients: %+v\n", tos)
 	err = EmailSender(tos, subject, message, nil)
 	if err != nil {
 		fmt.Printf("failed to send email: %v\n", err)
