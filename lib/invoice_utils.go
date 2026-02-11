@@ -160,6 +160,10 @@ func generate_link_invoice(e *core.RequestEvent) error {
 	if record.GetBool("paid") {
 		return e.HTML(200, "<h1>Invoice has already been paid</h1>")
 	}
+	errs := e.App.ExpandRecord(record, []string{"members"}, nil)
+	if errs != nil {
+		log.Printf("Error expanding record: %v", errs)
+	}
 	//check if invoice has been updated in the last 12 hours
 	//redirect user to session_url(if its not empty) else create a new session url
 	updatedAt := record.GetDateTime("updated")
@@ -187,6 +191,19 @@ func generate_link_invoice(e *core.RequestEvent) error {
 func generateSession(invoice *core.Record) (*stripe.CheckoutSession, error) {
 	// Check if customer exists based on the invoice email.
 	email := invoice.GetString("email")
+	name := invoice.GetString("name")
+	if invoice.GetStringSlice("members") != nil && len(invoice.GetStringSlice("members")) > 0 {
+		allMembers := invoice.ExpandedAll("members")
+		if len(allMembers) > 0 {
+			firstMember := allMembers[0]
+			memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
+			memberEmail := firstMember.GetString("email")
+			if memberEmail != "" {
+				email = memberEmail
+				name = memberName
+			}
+		}
+	}
 	custParams := &stripe.CustomerListParams{
 		Email: stripe.String(email),
 	}
@@ -196,8 +213,6 @@ func generateSession(invoice *core.Record) (*stripe.CheckoutSession, error) {
 	if ci.Next() {
 		cust = ci.Customer()
 	} else {
-		// Create a new customer.
-		name := invoice.GetString("name")
 		createParams := &stripe.CustomerParams{
 			Email: stripe.String(email),
 			Name:  stripe.String(name),

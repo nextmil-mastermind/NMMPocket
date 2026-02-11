@@ -27,6 +27,7 @@ type Invoice struct {
 	InvoiceType   string                `db:"type" mapstructure:"type"`
 	SessionURL    string                `db:"sessionurl" mapstructure:"sessionurl"`
 	DaysRemaining int                   `db:"days_remaining" mapstructure:"days_remaining"`
+	Members       []string              `db:"members" mapstructure:"members"`
 }
 
 var InvoiceKeys = []string{
@@ -64,6 +65,40 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 	}
 	templates := getEmailTemplates(app.DB())
 	for _, invoice := range res {
+		//check if the invoice has a member associated with it, if it does we need to grab the member
+		hasMember := len(invoice.Members) > 0
+		var memberTo mail.Address
+		var memberCC []mail.Address
+		if hasMember {
+			var members []struct {
+				First string `db:"first_name"`
+				Last  string `db:"last_name"`
+				Email string `db:"email"`
+			}
+			err := app.DB().Select("first_name, last_name, email").
+				From("members").
+				Where(dbx.NewExp("id IN ({:ids})", dbx.Params{"ids": invoice.Members})).
+				All(&members)
+			if err != nil {
+				log.Default().Println(err)
+			} else {
+				for _, member := range members {
+					if member.Email == "" {
+						continue
+					}
+					name := strings.TrimSpace(member.First + " " + member.Last)
+					if memberTo.Address == "" {
+						memberTo = mail.Address{Address: member.Email, Name: name}
+						continue
+					}
+					memberCC = append(memberCC, mail.Address{Address: member.Email, Name: name})
+				}
+				if len(members) > 0 {
+					invoice.Name = strings.TrimSpace(members[0].First + " " + members[0].Last)
+					invoice.Email = members[0].Email
+				}
+			}
+		}
 		if invoice.InvoiceType == "auto" && invoice.DaysRemaining == 0 {
 			// Auto pay invoice
 			_, err := createStripeCharge(invoice, app)
@@ -71,7 +106,7 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 				log.Default().Println(err)
 			}
 		} else if invoice.Reminders {
-			message := sendReminderEmail(invoice, templates[invoice.DaysRemaining])
+			message := sendReminderEmail(invoice, templates[invoice.DaysRemaining], memberTo, memberCC)
 			err := app.NewMailClient().Send(message)
 			if err != nil {
 				log.Default().Println(err)
@@ -82,19 +117,25 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 	}
 }
 
-func sendReminderEmail(invoice Invoice, template EmailTemplate) *mailer.Message {
+func sendReminderEmail(invoice Invoice, template EmailTemplate, to mail.Address, cc []mail.Address) *mailer.Message {
 	messageText := paramsCleanUp(template.Body, invoice)
 	if invoice.InvoiceType == "auto" {
-		messageText = strings.Replace(messageText, "{{params.is_auto_pay}}", "<bold>Note:</bold> This invoice will be automatically billed to your card on the due date.<br>", -1)
+		messageText = strings.ReplaceAll(messageText, "{{params.is_auto_pay}}", "<bold>Note:</bold> This invoice will be automatically billed to your card on the due date.<br>")
 	} else {
-		messageText = strings.Replace(messageText, "{{params.is_auto_pay}}", "", -1)
+		messageText = strings.ReplaceAll(messageText, "{{params.is_auto_pay}}", "")
 	}
+	//
+	if to.Address == "" && invoice.Email != "" {
+		to = mail.Address{Address: invoice.Email, Name: invoice.Name}
+	}
+
 	message := &mailer.Message{
 		From: mail.Address{
 			Address: "info@nextmilmastermind.com",
 			Name:    "Next Mil Mastermind",
 		},
-		To:      []mail.Address{{Address: invoice.Email, Name: invoice.Name}},
+		To:      []mail.Address{to},
+		Cc:      cc,
 		Subject: paramsCleanUp(template.Subject, invoice),
 		HTML:    messageText,
 	}
@@ -116,12 +157,12 @@ func paramsCleanUp(Text string, invoice Invoice) string {
 	for _, key := range InvoiceKeys {
 		field := v.FieldByName(key)
 		if field.IsValid() && field.Kind() == reflect.String {
-			Text = strings.Replace(Text, "{{params."+key+"}}", field.String(), -1)
+			Text = strings.ReplaceAll(Text, "{{params."+key+"}}", field.String())
 		}
 	}
 	first_name := strings.Split(invoice.Name, " ")[0]
-	Text = strings.Replace(Text, "{{params.first_name}}", first_name, -1)
-	Text = strings.Replace(Text, "{{params.DueDate}}", convertTimeToString(invoice.DueDate), -1)
+	Text = strings.ReplaceAll(Text, "{{params.first_name}}", first_name)
+	Text = strings.ReplaceAll(Text, "{{params.DueDate}}", convertTimeToString(invoice.DueDate))
 	return Text
 }
 
