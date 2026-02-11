@@ -74,10 +74,25 @@ func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) err
 	record.Set("paid", true)
 	//set paid date to now in 2022-01-01 10:00:00.123Z format
 	record.Set("paid_date", time.Now().Format(time.RFC3339))
-
 	err = app.Save(record)
 	if err != nil {
 		return fmt.Errorf("failed to save invoice: %v", err)
+	}
+
+	email := record.GetString("email")
+	name := record.GetString("name")
+	if record.GetStringSlice("members") != nil && len(record.GetStringSlice("members")) > 0 {
+		app.ExpandRecord(record, []string{"members"}, nil)
+		allMembers := record.ExpandedAll("members")
+		if len(allMembers) > 0 {
+			firstMember := allMembers[0]
+			memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
+			memberEmail := firstMember.GetString("email")
+			if memberEmail != "" {
+				email = memberEmail
+				name = memberName
+			}
+		}
 	}
 	collection, err := app.FindCollectionByNameOrId("admin_notifications")
 	if err != nil {
@@ -91,13 +106,13 @@ func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) err
 			last4 = ""
 		}
 
-		err = save_card(record.GetString("email"), data["payment_method"].(string), last4)
+		err = save_card(email, data["payment_method"].(string), last4)
 		if err != nil {
 			return fmt.Errorf("failed to save card: %v", err)
 		}
 	}
 	notify := core.NewRecord(collection)
-	notify.Set("message", record.GetString("invoicename")+" has been paid by "+record.GetString("name"))
+	notify.Set("message", record.GetString("invoicename")+" has been paid by "+name+" ("+email+")")
 	notify.Set("title", "Invoice")
 	notify.Set("color", "green")
 	notify.Set("url", "https://dashboard.stripe.com/payments/"+data["id"].(string))
