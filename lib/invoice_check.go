@@ -2,6 +2,7 @@ package lib
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/mail"
 	"reflect"
@@ -86,9 +87,19 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 				Last  string `db:"last_name"`
 				Email string `db:"email"`
 			}
+			// Build the IN clause with proper parameter binding
+			params := dbx.Params{}
+			placeholders := make([]string, len(memberIDs))
+			for i, id := range memberIDs {
+				key := "id" + fmt.Sprintf("%d", i)
+				placeholders[i] = "{:" + key + "}"
+				params[key] = id
+			}
+
+			whereClause := "id IN (" + strings.Join(placeholders, ", ") + ")"
 			err := app.DB().Select("first_name, last_name, email").
 				From("members").
-				Where(dbx.NewExp("id IN ({:ids})", dbx.Params{"ids": memberIDs})).
+				Where(dbx.NewExp(whereClause, params)).
 				All(&members)
 			if err != nil {
 				log.Default().Println(err)
