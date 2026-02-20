@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/json"
 	"log"
 	"net/mail"
 	"reflect"
@@ -27,7 +28,7 @@ type Invoice struct {
 	InvoiceType   string                `db:"type" mapstructure:"type"`
 	SessionURL    string                `db:"sessionurl" mapstructure:"sessionurl"`
 	DaysRemaining int                   `db:"days_remaining" mapstructure:"days_remaining"`
-	Members       []string              `db:"members" mapstructure:"members"`
+	Members       string                `db:"members" mapstructure:"members"`
 }
 
 var InvoiceKeys = []string{
@@ -66,9 +67,19 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 	templates := getEmailTemplates(app.DB())
 	for _, invoice := range res {
 		//check if the invoice has a member associated with it, if it does we need to grab the member
-		hasMember := len(invoice.Members) > 0
+		hasMember := invoice.Members != ""
 		var memberTo mail.Address
 		var memberCC []mail.Address
+		var memberIDs []string
+		if hasMember {
+			// Parse the members field (JSON array format)
+			if invoice.Members != "" {
+				_ = json.Unmarshal([]byte(invoice.Members), &memberIDs)
+				if len(memberIDs) == 0 {
+					hasMember = false
+				}
+			}
+		}
 		if hasMember {
 			var members []struct {
 				First string `db:"first_name"`
@@ -77,7 +88,7 @@ func CheckInvoice(app *pocketbase.PocketBase) {
 			}
 			err := app.DB().Select("first_name, last_name, email").
 				From("members").
-				Where(dbx.NewExp("id IN ({:ids})", dbx.Params{"ids": invoice.Members})).
+				Where(dbx.NewExp("id IN ({:ids})", dbx.Params{"ids": memberIDs})).
 				All(&members)
 			if err != nil {
 				log.Default().Println(err)

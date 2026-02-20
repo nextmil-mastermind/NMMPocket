@@ -192,16 +192,16 @@ func generateSession(invoice *core.Record) (*stripe.CheckoutSession, error) {
 	// Check if customer exists based on the invoice email.
 	email := invoice.GetString("email")
 	name := invoice.GetString("name")
-	if invoice.GetStringSlice("members") != nil && len(invoice.GetStringSlice("members")) > 0 {
-		allMembers := invoice.ExpandedAll("members")
-		if len(allMembers) > 0 {
-			firstMember := allMembers[0]
-			memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
-			memberEmail := firstMember.GetString("email")
-			if memberEmail != "" {
-				email = memberEmail
-				name = memberName
-			}
+
+	// Try to get expanded members - they may already be expanded
+	allMembers := invoice.ExpandedAll("members")
+	if len(allMembers) > 0 {
+		firstMember := allMembers[0]
+		memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
+		memberEmail := firstMember.GetString("email")
+		if memberEmail != "" {
+			email = memberEmail
+			name = memberName
 		}
 	}
 	custParams := &stripe.CustomerListParams{

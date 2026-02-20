@@ -81,17 +81,17 @@ func invoiceResponseProcess(data map[string]any, app *pocketbase.PocketBase) err
 
 	email := record.GetString("email")
 	name := record.GetString("name")
-	if record.GetStringSlice("members") != nil && len(record.GetStringSlice("members")) > 0 {
-		app.ExpandRecord(record, []string{"members"}, nil)
-		allMembers := record.ExpandedAll("members")
-		if len(allMembers) > 0 {
-			firstMember := allMembers[0]
-			memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
-			memberEmail := firstMember.GetString("email")
-			if memberEmail != "" {
-				email = memberEmail
-				name = memberName
-			}
+
+	// Expand members relation if present
+	app.ExpandRecord(record, []string{"members"}, nil)
+	allMembers := record.ExpandedAll("members")
+	if len(allMembers) > 0 {
+		firstMember := allMembers[0]
+		memberName := firstMember.GetString("first_name") + " " + firstMember.GetString("last_name")
+		memberEmail := firstMember.GetString("email")
+		if memberEmail != "" {
+			email = memberEmail
+			name = memberName
 		}
 	}
 	collection, err := app.FindCollectionByNameOrId("admin_notifications")
