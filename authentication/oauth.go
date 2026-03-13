@@ -502,5 +502,7 @@ func handleExternalAppExchangeRoute(e *core.RequestEvent) error {
 		}
 	}
 
-	return e.Redirect(http.StatusFound, redirectURL)
+	return e.JSON(http.StatusOK, map[string]any{
+		"redirect_url": redirectURL,
+	})
 }
