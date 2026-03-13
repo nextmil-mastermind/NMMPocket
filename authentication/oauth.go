@@ -437,7 +437,7 @@ func RegisterOAuthRoutes(router *router.Router[*core.RequestEvent]) {
 	//Special route for exchange to external apps
 	//This route is an authenticated route
 
-	router.GET("/oauth/external_app/exchange/:app_name", handleExternalAppExchangeRoute).Bind(apis.RequireAuth())
+	router.GET("/oauth/external_app/exchange/{app_name}", handleExternalAppExchangeRoute).Bind(apis.RequireAuth())
 
 	router.POST("/oauth/token", handleTokenRoute)
 	router.GET("/oauth/userinfo", handleUserInfoRoute).Bind(apis.RequireAuth())
