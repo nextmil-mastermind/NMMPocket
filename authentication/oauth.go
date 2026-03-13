@@ -364,7 +364,7 @@ func handleTokenRoute(e *core.RequestEvent) error {
 
 	session := newOAuthSessionFromRecord(records[0])
 
-	user, err := e.App.FindRecordById("users", session.UserID)
+	user, err := e.App.FindRecordById(oauthApp.GetString("collection"), session.UserID)
 	if err != nil {
 		return apis.NewBadRequestError("Invalid user", nil)
 	}
