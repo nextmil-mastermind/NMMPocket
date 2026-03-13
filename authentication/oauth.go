@@ -416,6 +416,7 @@ func handleUserInfoRoute(e *core.RequestEvent) error {
 		user_data["given_name"] = loggedInUser.GetString("first_name")
 		user_data["family_name"] = loggedInUser.GetString("last_name")
 		user_data["group"] = loggedInUser.GetString("group")
+		user_data["phone"] = loggedInUser.GetString("phone")
 		user_data["expiration_date"] = loggedInUser.GetDateTime("expiration").Time().Format("2006-01-02")
 	}
 	user_data["email"] = loggedInUser.GetString("email")
