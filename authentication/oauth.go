@@ -408,11 +408,13 @@ func handleUserInfoRoute(e *core.RequestEvent) error {
 	}
 	//check collection, if collection is users then return name, if collection is members then return first_name + " " + last_name
 	user_data := map[string]any{}
-	if loggedInUser.GetString("collectionName") == "users" {
+	if loggedInUser.Collection().Name == "users" {
 		user_data["name"] = loggedInUser.GetString("name")
 		user_data["roles"] = loggedInUser.GetString("roles")
-	} else if loggedInUser.GetString("collectionName") == "members" {
+	} else if loggedInUser.Collection().Name == "members" {
 		user_data["name"] = loggedInUser.GetString("first_name") + " " + loggedInUser.GetString("last_name")
+		user_data["given_name"] = loggedInUser.GetString("first_name")
+		user_data["family_name"] = loggedInUser.GetString("last_name")
 		user_data["group"] = loggedInUser.GetString("group")
 		user_data["expiration_date"] = loggedInUser.GetDateTime("expiration").Time().Format("2006-01-02")
 	}
@@ -422,7 +424,7 @@ func handleUserInfoRoute(e *core.RequestEvent) error {
 	user_data["username"] = loggedInUser.GetString("username")
 
 	if loggedInUser.GetString("avatar") != "" {
-		user_data["picture"] = "https://pocket.nextmil.org/api/files/" + loggedInUser.GetString("collectionName") + "/" + loggedInUser.Id + "/" + loggedInUser.GetString("avatar")
+		user_data["picture"] = "https://pocket.nextmil.org/api/files/" + loggedInUser.Collection().Name + "/" + loggedInUser.Id + "/" + loggedInUser.GetString("avatar")
 	}
 
 	return e.JSON(http.StatusOK, user_data)
