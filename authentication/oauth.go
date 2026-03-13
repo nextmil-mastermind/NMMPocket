@@ -433,6 +433,74 @@ func RegisterOAuthRoutes(router *router.Router[*core.RequestEvent]) {
 	// OAuth2 routes
 	router.GET("/oauth/login", handleLoginGetRoute)
 	router.POST("/oauth/login", handleLoginPostRoute)
+
+	//Special route for exchange to external apps
+	//This route is an authenticated route
+
+	router.GET("/oauth/external_app/exchange/:app_name", handleExternalAppExchangeRoute).Bind(apis.RequireAuth())
+
 	router.POST("/oauth/token", handleTokenRoute)
 	router.GET("/oauth/userinfo", handleUserInfoRoute).Bind(apis.RequireAuth())
+}
+
+func handleExternalAppExchangeRoute(e *core.RequestEvent) error {
+	appName := e.Request.PathValue("app_name")
+	//url unencode the app name
+	appName = strings.ReplaceAll(appName, "%20", " ")
+
+	//Find the app by name
+	oauthApp, err := e.App.FindFirstRecordByFilter("oauth_apps", "name = {:name}", dbx.Params{"name": appName})
+	if err != nil {
+		return apis.NewBadRequestError("Invalid app name", nil)
+	}
+
+	authRecord := e.Auth
+
+	if authRecord.GetString("collectionName") != oauthApp.GetString("collection") {
+		return apis.NewBadRequestError("Authenticated user does not belong to the required collection for this app", nil)
+	}
+
+	// Generate authorization code
+	authCode := security.RandomString(32)
+
+	// Create a new OAuth session for this exchange
+	session := &OAuthSession{
+		ClientID:    oauthApp.Id,
+		RedirectURI: oauthApp.GetString("redirect_uri"),
+		State:       security.RandomString(16), // Random state for CSRF protection
+		Scope:       "openid,profile,email",
+		ExpiresAt:   time.Now().Add(5 * time.Minute), // Short-lived session
+		AuthCode:    authCode,
+		UserID:      authRecord.Id,
+	}
+	// Create session record
+	collection, err := e.App.FindCollectionByNameOrId("oauth_sessions")
+	if err != nil {
+		return apis.NewInternalServerError("Failed to access sessions collection", err)
+	}
+
+	record := core.NewRecord(collection)
+	record.Load(session.toMap())
+	record.Id = security.RandomString(32)
+
+	if err := e.App.Save(record); err != nil {
+		return apis.NewInternalServerError("Failed to update session", err)
+	}
+
+	// Redirect back to client with authorization code
+	redirectURL := session.RedirectURI
+	if redirectURL[len(redirectURL)-1] != '?' {
+		redirectURL += "?"
+	}
+	redirectURL += "code=" + authCode + "&state=" + session.State
+
+	//add any params from the original request
+	originalParams := e.Request.URL.Query()
+	for key, values := range originalParams {
+		for _, value := range values {
+			redirectURL += "&" + key + "=" + value
+		}
+	}
+
+	return e.Redirect(http.StatusFound, redirectURL)
 }
