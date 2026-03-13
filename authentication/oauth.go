@@ -457,7 +457,8 @@ func handleExternalAppExchangeRoute(e *core.RequestEvent) error {
 	}
 	fmt.Printf("Found app: %s with ID: %s\n", oauthApp.GetString("name"), oauthApp.Id)
 	authRecord := e.Auth
-
+	fmt.Printf("Authenticated user: %s from collection: %s\n", authRecord.GetString("email"), authRecord.GetString("collectionName"))
+	fmt.Printf("App requires collection: %s\n", oauthApp.GetString("collection"))
 	if authRecord.GetString("collectionName") != oauthApp.GetString("collection") {
 		return apis.NewBadRequestError("Authenticated user does not belong to the required collection for this app", nil)
 	}
