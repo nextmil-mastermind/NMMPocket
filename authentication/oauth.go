@@ -445,21 +445,16 @@ func RegisterOAuthRoutes(router *router.Router[*core.RequestEvent]) {
 
 func handleExternalAppExchangeRoute(e *core.RequestEvent) error {
 	appName := e.Request.PathValue("app_name")
-	fmt.Printf("External app exchange requested for app: %s\n", appName)
 	//url unencode the app name
 	appName = strings.ReplaceAll(appName, "%20", " ")
-	fmt.Printf("Decoded app name: %s\n", appName)
 
 	//Find the app by name
 	oauthApp, err := e.App.FindFirstRecordByFilter("oauth_apps", "name ~ {:name}", dbx.Params{"name": appName})
 	if err != nil {
 		return apis.NewBadRequestError("Invalid app name", nil)
 	}
-	fmt.Printf("Found app: %s with ID: %s\n", oauthApp.GetString("name"), oauthApp.Id)
 	authRecord := e.Auth
-	fmt.Printf("Authenticated user: %s from collection: %s\n", authRecord.GetString("email"), authRecord.GetString("collectionName"))
-	fmt.Printf("App requires collection: %s\n", oauthApp.GetString("collection"))
-	if authRecord.GetString("collectionName") != oauthApp.GetString("collection") {
+	if authRecord.Collection().Name != oauthApp.GetString("collection") {
 		return apis.NewBadRequestError("Authenticated user does not belong to the required collection for this app", nil)
 	}
 
