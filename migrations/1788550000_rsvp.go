@@ -1,6 +1,9 @@
 package migrations
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 )
@@ -80,10 +83,25 @@ func init() {
 			})
 		}
 
-		rsvp.AddIndex("idx_rsvp_slug", true, "slug", "")
-
+		// Save fields first. Existing rows often share an empty slug, so the
+		// unique index must wait until those values are backfilled.
 		if err := app.Save(rsvp); err != nil {
 			return err
+		}
+
+		if err := backfillRSVPSlugs(app); err != nil {
+			return err
+		}
+
+		rsvp, err = app.FindCollectionByNameOrId("rsvp")
+		if err != nil {
+			return err
+		}
+		if rsvp.GetIndex("idx_rsvp_slug") == "" {
+			rsvp.AddIndex("idx_rsvp_slug", true, "slug", "")
+			if err := app.Save(rsvp); err != nil {
+				return err
+			}
 		}
 
 		if _, err := app.FindCollectionByNameOrId("rsvp_responses"); err == nil {
@@ -160,4 +178,67 @@ func addFieldIfMissing(collection *core.Collection, field core.Field) {
 
 func floatPtr(v float64) *float64 {
 	return &v
+}
+
+func backfillRSVPSlugs(app core.App) error {
+	records, err := app.FindAllRecords("rsvp")
+	if err != nil {
+		return err
+	}
+
+	used := make(map[string]bool, len(records))
+	for _, record := range records {
+		slug := record.GetString("slug")
+		if slug == "" || used[slug] {
+			slug = uniqueRSVPSlug(record, used)
+			record.Set("slug", slug)
+			if err := app.Save(record); err != nil {
+				return fmt.Errorf("backfill slug for %s: %w", record.Id, err)
+			}
+		}
+		used[slug] = true
+	}
+	return nil
+}
+
+func uniqueRSVPSlug(record *core.Record, used map[string]bool) string {
+	base := slugify(record.GetString("title"))
+	if base == "" {
+		base = slugify(record.GetString("name"))
+	}
+	if base == "" {
+		base = record.Id
+	}
+
+	if !used[base] {
+		return base
+	}
+	candidate := base + "-" + record.Id
+	if !used[candidate] {
+		return candidate
+	}
+	for i := 2; ; i++ {
+		candidate = fmt.Sprintf("%s-%s-%d", base, record.Id, i)
+		if !used[candidate] {
+			return candidate
+		}
+	}
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	lastHyphen := false
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			lastHyphen = false
+			continue
+		}
+		if !lastHyphen && b.Len() > 0 {
+			b.WriteByte('-')
+			lastHyphen = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
