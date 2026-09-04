@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine as builder
+FROM golang:1.27-alpine as builder
 RUN mkdir /build
 ADD /openphone /build/openphone
 ADD /lib /build/lib
@@ -10,6 +10,8 @@ ADD /authentication /build/authentication
 ADD *.go /build/
 ADD /zoomcon /build/zoomcon
 ADD /email /build/email
+ADD /rsvp /build/rsvp
+ADD /migrations /build/migrations
 WORKDIR /build
 RUN GOOS=linux GOARCH=amd64 go build -o pocketbase
 
@@ -25,9 +27,11 @@ RUN apk add --no-cache \
 # Create a directory for PocketBase
 RUN mkdir -p /pb
 RUN mkdir -p /pb/authhtml
+RUN mkdir -p /pb/rsvphtml
 
 COPY --from=builder /build/pocketbase /pb/pocketbase
 COPY --from=builder /build/authentication/html/* /pb/authhtml/
+COPY --from=builder /build/rsvp/html/* /pb/rsvphtml/
 
 # Make the binary executable
 RUN chmod +x /pb/pocketbase

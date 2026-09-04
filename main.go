@@ -11,7 +11,9 @@ import (
 	"nmmpocket/authentication"
 	"nmmpocket/email"
 	"nmmpocket/lib"
+	_ "nmmpocket/migrations"
 	"nmmpocket/openphone"
+	"nmmpocket/rsvp"
 	"nmmpocket/zoomcon"
 	"os"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/stripe/stripe-go/v81"
 )
 
@@ -42,6 +45,7 @@ func main() {
 			log.Fatal("Error loading .env file")
 		}
 	}
+
 	authentication.Init()
 	rpOriginsEnv := os.Getenv("origins")
 	rpOrigins := strings.Split(rpOriginsEnv, ",")
@@ -67,6 +71,12 @@ func main() {
 	appCtx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
+	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
+		// enable auto creation of migration files when making collection changes in the Dashboard
+		// (the IsProbablyGoRun check is to enable it only during development)
+		Automigrate: false,
+	})
+
 	// Register email mailer to replace pocketbase mailer with lib.EmailSender
 	email.RegisterMailer(app)
 
@@ -76,6 +86,7 @@ func main() {
 	go zoomcon.StartStatusAggregator(appCtx, statusIn)
 
 	openphone.Start(appCtx)
+	rsvp.RegisterHooks(app)
 
 	app.Cron().MustAdd("check_invoice", "0 11 * * *", func() { lib.CheckInvoice(app) })
 	app.Cron().Add("schedule_check", "0,30 * * * *", func() { lib.ScheduleCheck(app) })
@@ -253,6 +264,7 @@ func main() {
 		})
 		se.Router.POST("/invoice/autopay/force", lib.InvoiceAutopayForceRoute).Bind(apis.RequireAuth())
 		authentication.Routes(se.Router)
+		rsvp.Routes(se.Router)
 		return se.Next()
 	})
 
