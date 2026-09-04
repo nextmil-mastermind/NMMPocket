@@ -49,10 +49,10 @@ PocketBase also has system fields: `id`, `created`, `updated`, `collectionId`, `
 | `slug` | text, unique | yes | URL name. Pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$`. Example: `september-2026-3-day`. Unique index `idx_rsvp_slug`. |
 | `message` | editor (HTML) | no | Rendered on the invited form above Accept/Decline. |
 | `not_invited_message` | editor (HTML) | no | Rendered after login when the member is not invited. Empty uses a built-in default. |
-| `members` | multi relation → `members` | no | Explicit invite list. IDs come from the stored relation and from expand. |
-| `members_only` | bool | no | If **true**, or if `members` is non-empty, only those IDs may RSVP or receive send. |
+| `members` | multi relation → `members` | no | If this list has anyone, only those members may RSVP / get email. Empty + `members_only` = every member (then `invite_active_only` can narrow it). |
+| `members_only` | bool | no | If **true** and `members` is empty, any member may register. If **false** and `members` is empty, nobody is invited. |
 | `groups` | multi select | no | Must match `members.group`. Values are copied from the `members.group` select when possible (at least `founder`). Empty = any group. |
-| `invite_active_only` | bool | no | Forced **true** on create. If true: member `expiration > now` **or** `group = founder`. |
+| `invite_active_only` | bool | no | Forced **true** on create. If true, the invite set is reduced to active members: `expiration > now` **or** `group = founder`. |
 | `expiration` | date | no | **Event** RSVP deadline. After this time invited members can view but not submit. Not the same as member membership expiration. |
 | `open` | bool | no | Forced **true** on create. If false, form is view-only. |
 | `email_template` | relation → `email_templates` | required to send | Subject + HTML for Brevo. |
@@ -90,7 +90,7 @@ These can stay on the record; the current routes ignore them.
 }
 ```
 
-With this shape: only the IDs in `members` can see Accept/Decline. Anyone else who logs in sees `not_invited_message`. After `2026-09-11 22:00:00Z` the form stays visible for invited members but submit is disabled. Send will fail until `email_template` is set.
+With this shape: `members` is populated, so only those IDs can Accept/Decline. Clear `members` and leave `members_only` true to let every member register (then turn on `invite_active_only` to keep only active ones). After `2026-09-11 22:00:00Z` the form stays visible for invited members but submit is disabled. Send will fail until `email_template` is set.
 
 ---
 
@@ -135,7 +135,7 @@ Used for login, invite checks, and email recipients.
 
 | Field | How RSVP uses it |
 |---|---|
-| `id` | Must match an ID in `rsvp.members` when the member list filter is on. |
+| `id` | Must match an ID in `rsvp.members` when that list is non-empty. |
 | `email` | Login, Brevo `to`, token identity. `info@nextmilmastermind.com` is always excluded. |
 | `username` | Alternate login if email lookup fails. |
 | `password` | `POST /rsvp/{slug}/login`. |
@@ -174,25 +174,27 @@ Put a button/link on `{{params.rsvp_url}}`. Members can also open `/rsvp/{slug}`
 
 ## Who is invited
 
-Every active rule is an **intersection**. Fail any one → not invited.
+Rules apply in order. Fail any one → not invited.
 
 1. Email is not `info@nextmilmastermind.com`.
-2. If `invite_active_only`: member `expiration` is in the future **or** `group = founder`.
-3. If `groups` has values: member `group` is in that list.
-4. If `members_only` is true **or** `members` is non-empty: member `id` is in `members`.
+2. If `invite_active_only`: keep only active members (`expiration` in the future **or** `group = founder`).
+3. If `groups` has values: member `group` must be in that list.
+4. If `members` has anyone: only those IDs. If `members` is empty and `members_only` is true: any remaining member. If `members` is empty and `members_only` is false: nobody.
 
-If `members_only` is true and `members` is empty, nobody is invited.
+`invite_active_only` narrows whatever set step 4 produced (all members, or the explicit list).
 
 Member IDs are collected from `GetStringSlice("members")` and from `ExpandedAll("members")`.
 
 ### Invite matrix
 
-| `members_only` | `members` list | Who can RSVP / get email |
-|---|---|---|
-| false | empty | All members passing 1–3 |
-| false | has IDs | Only those IDs (plus 1–3) |
-| true | empty | Nobody |
-| true | has IDs | Only those IDs (plus 1–3) |
+| `members_only` | `members` list | `invite_active_only` | Who can RSVP / get email |
+|---|---|---|---|
+| true | empty | false | Every member (except info@) |
+| true | empty | true | Every **active** member (or founder) |
+| true | has IDs | false | Only those IDs |
+| true | has IDs | true | Only those IDs who are active (or founder) |
+| false | empty | * | Nobody |
+| false | has IDs | true/false | Only those IDs (active filter if on) |
 
 ---
 
@@ -280,14 +282,14 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
    - unique `slug`
    - `title` and `message`
    - `not_invited_message`
-   - `members` / `members_only` and/or `groups`
-   - uncheck `invite_active_only` after save if expired members should be included
+   - `members_only` true + empty `members` = all members; add IDs to `members` to restrict
+   - `invite_active_only` to keep only active members / founders
    - `expiration` deadline if needed
    - attach `email_template`
-4. Confirm your own member id is in `members` if you need to test the form.
+4. To test the form as yourself: either be in `members`, or clear `members` with `members_only` on.
 5. `POST /rsvp/{slug}/send` as a `users` auth token.
 6. In the dashboard: `sent_at` set, one `rsvp_response` row per invited member.
-7. Open `/rsvp/{slug}` as a listed member → Accept/Decline. As anyone else → not-invited page.
+7. Open `/rsvp/{slug}` as an invited member → Accept/Decline. As anyone else → not-invited page.
 
 ---
 

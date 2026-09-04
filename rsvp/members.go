@@ -45,7 +45,11 @@ func IsMemberInvited(event, member *core.Record) bool {
 		return false
 	}
 	ids := eventMemberIDs(event)
-	if (event.GetBool("members_only") || len(ids) > 0) && !slices.Contains(ids, member.Id) {
+	if len(ids) > 0 {
+		if !slices.Contains(ids, member.Id) {
+			return false
+		}
+	} else if !event.GetBool("members_only") {
 		return false
 	}
 	return true
@@ -117,12 +121,11 @@ func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
 	}
 
 	ids := eventMemberIDs(event)
-	if event.GetBool("members_only") || len(ids) > 0 {
-		if len(ids) == 0 {
-			return nil, nil
-		}
+	if len(ids) > 0 {
 		parts = append(parts, "id ?= {:ids}")
 		params["ids"] = ids
+	} else if !event.GetBool("members_only") {
+		return nil, nil
 	}
 
 	filter := strings.Join(parts, " && ")
