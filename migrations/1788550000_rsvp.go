@@ -74,6 +74,10 @@ func init() {
 			Name: "not_invited_message",
 			Help: "Shown to logged-in members who are not invited. Leave empty for the default message.",
 		})
+		addFieldIfMissing(rsvp, &core.BoolField{
+			Name: "allow_guests",
+			Help: "If checked, invited members can enter additional guests on the RSVP form.",
+		})
 
 		if rsvp.Fields.GetByName("title") == nil {
 			rsvp.Fields.Add(&core.TextField{
@@ -161,6 +165,7 @@ func init() {
 		for _, name := range []string{
 			"slug", "members", "groups", "invite_active_only",
 			"email_template", "sent_at", "open", "not_invited_message",
+			"allow_guests",
 		} {
 			if f := rsvp.Fields.GetByName(name); f != nil {
 				rsvp.Fields.RemoveById(f.GetId())

@@ -55,6 +55,7 @@ PocketBase also has system fields: `id`, `created`, `updated`, `collectionId`, `
 | `invite_active_only` | bool | no | Forced **true** on create. If true, the invite set is reduced to active members: `expiration > now` **or** `group = founder`. |
 | `expiration` | date | no | **Event** RSVP deadline. After this time invited members can view but not submit. Not the same as member membership expiration. |
 | `open` | bool | no | Forced **true** on create. If false, form is view-only. |
+| `allow_guests` | bool | no | If true, the form shows Additional guests. Off by default. |
 | `email_template` | relation → `email_templates` | required to send | Subject + HTML for Brevo. |
 | `sent_at` | date | no | Set automatically after a successful send. |
 
@@ -83,6 +84,7 @@ These can stay on the record; the current routes ignore them.
   "invite_active_only": false,
   "expiration": "2026-09-11 22:00:00.000Z",
   "open": true,
+  "allow_guests": false,
   "email_template": "",
   "sent_at": "",
   "message": "<h3>Hot Seat Time</h3><p>Click Accept or Decline below.</p>",
@@ -107,7 +109,7 @@ The code detects field names at runtime (first match wins):
 | Event link | `rsvp`, then `event` | relation → `rsvp` |
 | Member link | `member`, then `user` | relation → `members` |
 | Decision | `status`, then `response`, then `attending`, then `accepted` | select **or** bool |
-| Extra guests | `guests` | number, integer ≥ 0 (optional; form hides if missing) |
+| Extra guests | `guests` | number, integer ≥ 0 (shown only when the event has `allow_guests`) |
 | Note | `note` | text, max 2000 (optional; form hides if missing) |
 
 If a decision field is missing, migration adds `status` as a select: `accept`, `decline`.  
@@ -220,7 +222,7 @@ All under `/rsvp`. Cookie middleware loads `e.Auth` from cookie `rsvp_auth` when
 | `GET` | `/rsvp/{slug}?token=` | Public | Validate member auth token. Set cookie. **Redirect** to `/rsvp/{slug}` (token stripped from the URL). Invalid token → error page with login link. |
 | `GET` | `/rsvp/{slug}` | Public | No auth → login. Invited member → form. Other member → not-invited page. |
 | `POST` | `/rsvp/{slug}/login` | Public | Email/username + password against `members`. Sets cookie. Then same as GET. |
-| `POST` | `/rsvp/{slug}` | Invited member (cookie) | Body: `status=accept\|decline`, optional `guests`, `note`. Upserts `rsvp_response`. Confirmation page. |
+| `POST` | `/rsvp/{slug}` | Invited member (cookie) | Body: `status=accept\|decline`, optional `guests` (if `allow_guests`), `note`. Upserts `rsvp_response`. Confirmation page. |
 
 Unknown slug → “RSVP not found”.  
 Login failures use a generic “Invalid credentials.”
@@ -249,7 +251,7 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
 | File | When |
 |---|---|
 | `rsvp/html/login.html` | Anonymous GET, or failed/required login |
-| `rsvp/html/form.html` | Invited member: `message` HTML + Accept/Decline (+ guests/note if those fields exist) |
+| `rsvp/html/form.html` | Invited member: `message` HTML + Accept/Decline (+ guests if `allow_guests`, + note if that field exists) |
 | `rsvp/html/confirmation.html` | After a successful submit |
 | `rsvp/html/not_invited.html` | Authenticated member who failed invite rules |
 | `rsvp/html/error.html` | Missing event or bad/expired token |
@@ -270,8 +272,9 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
 
 | File | What it does |
 |---|---|
-| `migrations/1788550000_rsvp.go` | Adds missing `rsvp` fields (`slug`, `members`, `groups`, `invite_active_only`, `email_template`, `sent_at`, `open`, `not_invited_message`). Backfills unique slugs on existing rows, then creates `idx_rsvp_slug`. |
+| `migrations/1788550000_rsvp.go` | Adds missing `rsvp` fields (`slug`, `members`, `groups`, `invite_active_only`, `email_template`, `sent_at`, `open`, `not_invited_message`, `allow_guests`). Backfills unique slugs on existing rows, then creates `idx_rsvp_slug`. |
 | `migrations/1788551000_rsvp_response.go` | Deletes `rsvp_responses` if present. Ensures `rsvp_response` has event/member relations, a decision field, `guests`, `note`, and unique index. |
+| `migrations/1788552000_rsvp_allow_guests.go` | Adds `allow_guests` on existing `rsvp` collections. |
 
 ---
 
@@ -286,6 +289,7 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
    - `members_only` true + empty `members` = all members; add IDs to `members` to restrict
    - `invite_active_only` to keep only active members / founders
    - `expiration` deadline if needed
+   - `allow_guests` if members should enter extra guests
    - attach `email_template`
 4. To test the form as yourself: either be in `members`, or clear `members` with `members_only` on.
 5. `POST /rsvp/{slug}/send` as a `users` auth token.

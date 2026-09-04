@@ -52,6 +52,10 @@ func IsMemberInvited(event, member *core.Record) bool {
 	return true
 }
 
+func eventAllowsGuests(event *core.Record) bool {
+	return event.GetBool("allow_guests")
+}
+
 func eventIsOpen(event *core.Record) bool {
 	if !event.GetBool("open") {
 		return false

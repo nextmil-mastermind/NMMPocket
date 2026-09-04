@@ -145,9 +145,12 @@ func handleSubmit(e *core.RequestEvent) error {
 	if status != "accept" && status != "decline" {
 		return renderMemberView(e, event, e.Auth, "Please choose Accept or Decline.")
 	}
-	guests, _ := strconv.Atoi(e.Request.FormValue("guests"))
-	if guests < 0 {
-		guests = 0
+	guests := 0
+	if eventAllowsGuests(event) {
+		guests, _ = strconv.Atoi(e.Request.FormValue("guests"))
+		if guests < 0 {
+			guests = 0
+		}
 	}
 	note := strings.TrimSpace(e.Request.FormValue("note"))
 
@@ -162,7 +165,7 @@ func handleSubmit(e *core.RequestEvent) error {
 		record.Set(schema.MemberField, e.Auth.Id)
 	}
 	schema.setStatus(record, status == "accept")
-	if schema.GuestsField != "" {
+	if schema.GuestsField != "" && eventAllowsGuests(event) {
 		record.Set(schema.GuestsField, guests)
 	}
 	if schema.NoteField != "" {
@@ -178,7 +181,7 @@ func handleSubmit(e *core.RequestEvent) error {
 		"statusLabel": statusLabel(status),
 		"guests":      guests,
 		"note":        note,
-		"hasGuests":   schema.GuestsField != "",
+		"hasGuests":   eventAllowsGuests(event) && schema.GuestsField != "",
 	})
 }
 
@@ -222,7 +225,7 @@ func renderMemberView(e *core.RequestEvent, event, member *core.Record, formErro
 		"status":    status,
 		"guests":    guests,
 		"note":      note,
-		"hasGuests": schema.GuestsField != "",
+		"hasGuests": eventAllowsGuests(event) && schema.GuestsField != "",
 		"hasNote":   schema.NoteField != "",
 		"error":     formError,
 	})
