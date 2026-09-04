@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"fmt"
+
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 )
@@ -70,13 +72,30 @@ func init() {
 			})
 		}
 
-		rsvpField := firstFieldName(responses, "rsvp", "event")
-		memberField := firstFieldName(responses, "member", "user")
-		if rsvpField != "" && memberField != "" && responses.GetIndex("idx_rsvp_response_unique") == "" {
-			responses.AddIndex("idx_rsvp_response_unique", true, rsvpField+", "+memberField, "")
+		// Save new fields first. Existing duplicate (rsvp, member) rows
+		// must be cleaned up before the unique index can be created.
+		if err := app.Save(responses); err != nil {
+			return err
 		}
 
-		return app.Save(responses)
+		responses, err = app.FindCollectionByNameOrId("rsvp_response")
+		if err != nil {
+			return err
+		}
+		rsvpField := firstFieldName(responses, "rsvp", "event")
+		memberField := firstFieldName(responses, "member", "user")
+		if rsvpField != "" && memberField != "" {
+			if err := dedupeRSVPResponses(app, rsvpField, memberField); err != nil {
+				return err
+			}
+		}
+		if rsvpField != "" && memberField != "" && responses.GetIndex("idx_rsvp_response_unique") == "" {
+			responses.AddIndex("idx_rsvp_response_unique", true, rsvpField+", "+memberField, "")
+			if err := app.Save(responses); err != nil {
+				return err
+			}
+		}
+		return nil
 	}, func(app core.App) error {
 		responses, err := app.FindCollectionByNameOrId("rsvp_response")
 		if err != nil {
@@ -103,4 +122,61 @@ func firstFieldName(collection *core.Collection, names ...string) string {
 		}
 	}
 	return ""
+}
+
+func dedupeRSVPResponses(app core.App, rsvpField, memberField string) error {
+	records, err := app.FindAllRecords("rsvp_response")
+	if err != nil {
+		return err
+	}
+
+	type pair struct{ rsvp, member string }
+	best := map[pair]*core.Record{}
+	var remove []*core.Record
+
+	for _, record := range records {
+		rsvpID := record.GetString(rsvpField)
+		memberID := record.GetString(memberField)
+		if rsvpID == "" || memberID == "" {
+			remove = append(remove, record)
+			continue
+		}
+		key := pair{rsvp: rsvpID, member: memberID}
+		existing := best[key]
+		if existing == nil {
+			best[key] = record
+			continue
+		}
+		if preferRSVPResponse(record, existing) {
+			remove = append(remove, existing)
+			best[key] = record
+			continue
+		}
+		remove = append(remove, record)
+	}
+
+	for _, record := range remove {
+		if err := app.Delete(record); err != nil {
+			return fmt.Errorf("dedupe rsvp_response %s: %w", record.Id, err)
+		}
+	}
+	return nil
+}
+
+func preferRSVPResponse(candidate, current *core.Record) bool {
+	candStatus := rsvpResponseHasDecision(candidate)
+	currStatus := rsvpResponseHasDecision(current)
+	if candStatus != currStatus {
+		return candStatus
+	}
+	return candidate.GetDateTime("updated").Time().After(current.GetDateTime("updated").Time())
+}
+
+func rsvpResponseHasDecision(record *core.Record) bool {
+	for _, name := range []string{"status", "response"} {
+		if record.GetString(name) != "" {
+			return true
+		}
+	}
+	return record.GetBool("attending") || record.GetBool("accepted")
 }
