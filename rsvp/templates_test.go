@@ -9,15 +9,18 @@ import (
 func TestTemplatesRender(t *testing.T) {
 	pages := []string{"login.html", "form.html", "confirmation.html", "not_invited.html", "error.html"}
 	data := map[string]any{
-		"title":     "Test Event",
-		"slug":      "test-event",
-		"firstName": "Ada",
-		"open":      true,
-		"status":    "yes",
-		"guests":    1,
-		"note":      "hello",
-		"error":     "",
-		"message":   "not invited",
+		"title":       "Test Event",
+		"slug":        "test-event",
+		"firstName":   "Ada",
+		"open":        true,
+		"status":      "accept",
+		"statusLabel": "Accepted",
+		"guests":      1,
+		"note":        "hello",
+		"error":       "",
+		"message":     "Event details",
+		"hasGuests":   true,
+		"hasNote":     true,
 	}
 	for _, name := range pages {
 		html, err := pbtemplate.NewRegistry().LoadFiles("html/" + name).Render(data)

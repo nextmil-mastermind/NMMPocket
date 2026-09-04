@@ -22,7 +22,12 @@ func rsvpTitle(record *core.Record) string {
 }
 
 func FindBySlug(app core.App, slug string) (*core.Record, error) {
-	return app.FindFirstRecordByFilter("rsvp", "slug = {:slug}", dbx.Params{"slug": slug})
+	record, err := app.FindFirstRecordByFilter("rsvp", "slug = {:slug}", dbx.Params{"slug": slug})
+	if err != nil {
+		return nil, err
+	}
+	_ = app.ExpandRecord(record, []string{"members"}, nil)
+	return record, nil
 }
 
 func IsMemberInvited(event, member *core.Record) bool {
@@ -30,27 +35,70 @@ func IsMemberInvited(event, member *core.Record) bool {
 		return false
 	}
 	if event.GetBool("invite_active_only") {
-		exp := eventExpiration(member)
+		exp := memberExpiration(member)
 		if !exp.After(time.Now()) && member.GetString("group") != founderGroup {
 			return false
 		}
 	}
-	groups := event.GetStringSlice("groups")
+	groups := nonzeroStrings(event.GetStringSlice("groups"))
 	if len(groups) > 0 && !slices.Contains(groups, member.GetString("group")) {
 		return false
 	}
-	invited := event.GetStringSlice("members")
-	if len(invited) > 0 && !slices.Contains(invited, member.Id) {
+	ids := eventMemberIDs(event)
+	if (event.GetBool("members_only") || len(ids) > 0) && !slices.Contains(ids, member.Id) {
 		return false
 	}
 	return true
 }
 
-func eventExpiration(member *core.Record) time.Time {
+func eventIsOpen(event *core.Record) bool {
+	if !event.GetBool("open") {
+		return false
+	}
+	deadline := event.GetDateTime("expiration").Time()
+	if !deadline.IsZero() && !deadline.After(time.Now()) {
+		return false
+	}
+	return true
+}
+
+func memberExpiration(member *core.Record) time.Time {
 	return member.GetDateTime("expiration").Time()
 }
 
+func eventMemberIDs(event *core.Record) []string {
+	seen := map[string]bool{}
+	var ids []string
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	for _, id := range event.GetStringSlice("members") {
+		add(id)
+	}
+	for _, rec := range event.ExpandedAll("members") {
+		add(rec.Id)
+	}
+	return ids
+}
+
+func nonzeroStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
 func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
+	_ = app.ExpandRecord(event, []string{"members"}, nil)
+
 	var parts []string
 	params := dbx.Params{}
 
@@ -62,14 +110,17 @@ func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
 		params["founder"] = founderGroup
 	}
 
-	groups := event.GetStringSlice("groups")
+	groups := nonzeroStrings(event.GetStringSlice("groups"))
 	if len(groups) > 0 {
 		parts = append(parts, "group ?= {:groups}")
 		params["groups"] = groups
 	}
 
-	ids := event.GetStringSlice("members")
-	if len(ids) > 0 {
+	ids := eventMemberIDs(event)
+	if event.GetBool("members_only") || len(ids) > 0 {
+		if len(ids) == 0 {
+			return nil, nil
+		}
 		parts = append(parts, "id ?= {:ids}")
 		params["ids"] = ids
 	}

@@ -1,108 +1,303 @@
 # RSVP
 
-PocketBase serves member RSVP pages and sends invite emails. Members open a slug URL (with a token from email, or by logging in). Staff create events in the `rsvp` collection and trigger send from `POST /rsvp/{slug}/send`.
+PocketBase owns the full RSVP flow: event records, invite filtering, Brevo emails with magic-link tokens, member login, Accept/Decline, and response storage.
 
-## Flow
+Public URL shape: `{appurl}/rsvp/{slug}`  
+Example: `https://pocket.nextmil.org/rsvp/september-2026-3-day`
 
-1. Create an RSVP in the dashboard (`title`, unique `slug`, optional filters, `email_template`).
-2. New records default to **open** and **invite active members only**. Uncheck those after save if you need the opposite.
-3. Send emails: `POST /rsvp/{slug}/send` as an authenticated `users` record.
-4. Invited members click `{appurl}/rsvp/{slug}?token=...` or visit `{appurl}/rsvp/{slug}` and log in.
-5. Token links set an HttpOnly cookie and redirect to `/rsvp/{slug}` so the token is not left in the address bar.
-6. Invited members submit yes / no / maybe. Others see the not-invited page.
+`appurl` comes from the environment. If it is empty, links fall back to `https://pocket.nextmil.org`.
+
+---
+
+## Architecture
+
+```
+Staff (users)                 Members
+     |                            |
+     |  dashboard: create rsvp    |
+     |  POST /rsvp/{slug}/send    |
+     v                            |
+ Resolve invite list              |
+ Upsert rsvp_response rows        |
+ Brevo email with ?token=         |
+     |                            v
+     +------------------> GET /rsvp/{slug}?token=
+                          cookie + redirect to /rsvp/{slug}
+                          or login at /rsvp/{slug}
+                          invited  -> form (message + Accept/Decline)
+                          not listed -> not-invited page
+                          POST /rsvp/{slug} -> rsvp_response
+```
+
+Code lives in `rsvp/`. HTML is in `rsvp/html/` (prod copies to `/pb/rsvphtml/`).
+
+---
 
 ## Collections
 
 ### `rsvp` (event)
 
-| Field | Purpose |
-|---|---|
-| `slug` | Required unique URL name (`q4-workshop`). Pattern: lowercase letters, numbers, hyphens. |
-| `title` | Display name (falls back to `name`, then `slug`). |
-| `members` | Optional explicit invite list. Empty = no extra ID filter. |
-| `groups` | Optional group filter (values come from `members.group`). Empty = any group. |
-| `invite_active_only` | If true: `expiration > now` or `group = founder`. |
-| `email_template` | Relation to `email_templates`. Required to send. |
-| `sent_at` | Set automatically after a successful send. |
-| `open` | If false, invited members can view but not submit. |
-| `not_invited_message` | Optional HTML shown on the not-invited page. |
+One record per event. Looked up by **`slug`**, never by record id.
 
-### `rsvp_responses`
+PocketBase also has system fields: `id`, `created`, `updated`, `collectionId`, `collectionName`.
 
-Admin-only API (custom routes write these). One row per invited member (`rsvp` + `member` unique).
+#### Fields the app uses
 
-| Field | Purpose |
-|---|---|
-| `rsvp` | Event |
-| `member` | Member |
-| `status` | `yes`, `no`, `maybe`, or empty (invited, not yet responded) |
-| `guests` | Extra guests (integer, default 0) |
-| `note` | Optional text |
+| Field | Type | Required | Default / notes |
+|---|---|---|---|
+| `title` | text | yes (if present) | Shown on every page. Fallback order: `title` → `name` → `slug`. |
+| `slug` | text, unique | yes | URL name. Pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$`. Example: `september-2026-3-day`. Unique index `idx_rsvp_slug`. |
+| `message` | editor (HTML) | no | Rendered on the invited form above Accept/Decline. |
+| `not_invited_message` | editor (HTML) | no | Rendered after login when the member is not invited. Empty uses a built-in default. |
+| `members` | multi relation → `members` | no | Explicit invite list. IDs come from the stored relation and from expand. |
+| `members_only` | bool | no | If **true**, or if `members` is non-empty, only those IDs may RSVP or receive send. |
+| `groups` | multi select | no | Must match `members.group`. Values are copied from the `members.group` select when possible (at least `founder`). Empty = any group. |
+| `invite_active_only` | bool | no | Forced **true** on create. If true: member `expiration > now` **or** `group = founder`. |
+| `expiration` | date | no | **Event** RSVP deadline. After this time invited members can view but not submit. Not the same as member membership expiration. |
+| `open` | bool | no | Forced **true** on create. If false, form is view-only. |
+| `email_template` | relation → `email_templates` | required to send | Subject + HTML for Brevo. |
+| `sent_at` | date | no | Set automatically after a successful send. |
 
-Send upserts a pending row for each invited member so the dashboard can show invited vs responded.
+On create, a hook always sets `invite_active_only = true` and `open = true`. Uncheck them after the first save if you want the opposite.
 
-## Who is invited
+#### Fields that exist on live records but are not used by this app yet
 
-Filters **intersect**. A member must pass every filter that is set.
+These can stay on the record; the current routes ignore them.
 
-- Always exclude `info@nextmilmastermind.com`
-- If `invite_active_only`: future `expiration` or `group = founder`
-- If `groups` is set: member `group` must be in the list
-- If `members` is set: member id must be in the list
+| Field | Seen on live data | Current behavior |
+|---|---|---|
+| `additional` | relation/list, often `[]` | Ignored. Not part of invite or send. |
+| `additional_too` | bool | Ignored. |
+| `conditional_message` | JSON (`additional`, `members`, `messages`) | Ignored. Everyone sees `message` or `not_invited_message`. |
 
-Empty `groups` and empty `members` means all members who pass the other rules.
-
-## Member URLs
-
-Base URL is `appurl` (falls back to `https://pocket.nextmil.org`).
-
-| URL | Behavior |
-|---|---|
-| `GET /rsvp/{slug}` | Login if anonymous. Form if invited. Not-invited page otherwise. |
-| `GET /rsvp/{slug}?token=...` | Validate member auth token, set cookie, redirect to `/rsvp/{slug}`. |
-| `POST /rsvp/{slug}/login` | Email/username + password against `members`. |
-| `POST /rsvp/{slug}` | Save `status`, `guests`, `note` (invited + open only). |
-
-Closed events stay on the form with a notice; they do not use the not-invited page.
-
-## Sending emails
-
-Authenticated `users` only (same gate as `/user_token`):
-
-```http
-POST /rsvp/{slug}/send
-Authorization: <PocketBase users auth token>
-```
-
-Response:
+#### Example record
 
 ```json
 {
-  "invited": 42,
-  "emailed": 40,
+  "id": "9pb4qwm2qck5zzs",
+  "title": "September 2026 3-Day",
+  "slug": "september-2026-3-day",
+  "members_only": true,
+  "members": ["vrfyk60df47phvk", "35xwietvmv21d4s"],
+  "groups": [],
+  "invite_active_only": false,
+  "expiration": "2026-09-11 22:00:00.000Z",
+  "open": true,
+  "email_template": "",
+  "sent_at": "",
+  "message": "<h3>Hot Seat Time</h3><p>Click Accept or Decline below.</p>",
+  "not_invited_message": "<p>You are not on the invite list.</p>"
+}
+```
+
+With this shape: only the IDs in `members` can see Accept/Decline. Anyone else who logs in sees `not_invited_message`. After `2026-09-11 22:00:00Z` the form stays visible for invited members but submit is disabled. Send will fail until `email_template` is set.
+
+---
+
+### `rsvp_response` (one row per member per event)
+
+**Use this collection.** Do not use `rsvp_responses` (that extra collection is deleted by migration `1788551000_rsvp_response.go`).
+
+API rules are locked for public CRUD. Only the custom `/rsvp/...` routes write rows.
+
+The code detects field names at runtime (first match wins):
+
+| Role | Accepted field names | Type |
+|---|---|---|
+| Event link | `rsvp`, then `event` | relation → `rsvp` |
+| Member link | `member`, then `user` | relation → `members` |
+| Decision | `status`, then `response`, then `attending`, then `accepted` | select **or** bool |
+| Extra guests | `guests` | number, integer ≥ 0 (optional; form hides if missing) |
+| Note | `note` | text, max 2000 (optional; form hides if missing) |
+
+If a decision field is missing, migration adds `status` as a select: `accept`, `decline`.  
+If `guests` / `note` are missing, migration adds them.  
+Unique index `idx_rsvp_response_unique` on `(rsvp|event, member|user)` when those relations exist.
+
+#### How Accept/Decline is stored
+
+The form always posts `status=accept` or `status=decline`. That is mapped onto whatever decision field exists:
+
+| Decision field | Accept stored as | Decline stored as |
+|---|---|---|
+| bool (`attending` / `accepted`) | `true` | `false` |
+| select containing `accept` / `yes` / `accepted` / `attending` | that value | — |
+| select containing `decline` / `no` / `declined` | — | that value |
+| select with other values | first value | second value (or first if only one) |
+
+Pending rows created at send time have no decision yet (empty select / false bool). That is how you tell invited vs responded in the dashboard.
+
+---
+
+### `members` (auth collection)
+
+Used for login, invite checks, and email recipients.
+
+| Field | How RSVP uses it |
+|---|---|
+| `id` | Must match an ID in `rsvp.members` when the member list filter is on. |
+| `email` | Login, Brevo `to`, token identity. `info@nextmilmastermind.com` is always excluded. |
+| `username` | Alternate login if email lookup fails. |
+| `password` | `POST /rsvp/{slug}/login`. |
+| `first_name`, `last_name` | Email params and greeting. |
+| `group` | `groups` filter; `founder` bypasses `invite_active_only`. |
+| `expiration` | Membership end date. Used only when `invite_active_only` is true. |
+
+Auth tokens are PocketBase member auth tokens (`NewAuthToken` / `FindAuthRecordByToken`).
+
+---
+
+### `email_templates`
+
+Relation target of `rsvp.email_template`.
+
+| Field | Use |
+|---|---|
+| `subject` | Brevo subject (may include `{{params.*}}`). |
+| `html` | Brevo HTML body. |
+
+Template params sent per recipient:
+
+| Param | Value |
+|---|---|
+| `{{params.first_name}}` | Member first name |
+| `{{params.last_name}}` | Member last name |
+| `{{params.name}}` | Full name (also set by the mailer) |
+| `{{params.email}}` | Member email |
+| `{{params.rsvp_url}}` | `{appurl}/rsvp/{slug}?token={authToken}` |
+| `{{params.title}}` | Event title |
+| `{{params.slug}}` | Event slug |
+
+Put a button/link on `{{params.rsvp_url}}`. Members can also open `/rsvp/{slug}` and log in without the email.
+
+---
+
+## Who is invited
+
+Every active rule is an **intersection**. Fail any one → not invited.
+
+1. Email is not `info@nextmilmastermind.com`.
+2. If `invite_active_only`: member `expiration` is in the future **or** `group = founder`.
+3. If `groups` has values: member `group` is in that list.
+4. If `members_only` is true **or** `members` is non-empty: member `id` is in `members`.
+
+If `members_only` is true and `members` is empty, nobody is invited.
+
+Member IDs are collected from `GetStringSlice("members")` and from `ExpandedAll("members")`.
+
+### Invite matrix
+
+| `members_only` | `members` list | Who can RSVP / get email |
+|---|---|---|
+| false | empty | All members passing 1–3 |
+| false | has IDs | Only those IDs (plus 1–3) |
+| true | empty | Nobody |
+| true | has IDs | Only those IDs (plus 1–3) |
+
+---
+
+## When the form is closed
+
+Invited members still see the form. Submit is disabled when:
+
+- `open` is false, **or**
+- `expiration` is set and `now >= expiration`
+
+Not-invited members never see the form, even if the event is open.
+
+---
+
+## HTTP routes
+
+All under `/rsvp`. Cookie middleware loads `e.Auth` from cookie `rsvp_auth` when the Authorization header is absent. Cookie: HttpOnly, `Path=/rsvp`, 14 days, Secure in TLS/prod, SameSite Lax.
+
+| Method | Path | Who | Behavior |
+|---|---|---|---|
+| `POST` | `/rsvp/{slug}/send` | Authenticated **`users`** only | Resolve invitees, upsert pending `rsvp_response` rows, send Brevo, set `sent_at`. |
+| `GET` | `/rsvp/{slug}?token=` | Public | Validate member auth token. Set cookie. **Redirect** to `/rsvp/{slug}` (token stripped from the URL). Invalid token → error page with login link. |
+| `GET` | `/rsvp/{slug}` | Public | No auth → login. Invited member → form. Other member → not-invited page. |
+| `POST` | `/rsvp/{slug}/login` | Public | Email/username + password against `members`. Sets cookie. Then same as GET. |
+| `POST` | `/rsvp/{slug}` | Invited member (cookie) | Body: `status=accept\|decline`, optional `guests`, `note`. Upserts `rsvp_response`. Confirmation page. |
+
+Unknown slug → “RSVP not found”.  
+Login failures use a generic “Invalid credentials.”
+
+### Send response
+
+```http
+POST /rsvp/{slug}/send
+Authorization: <PocketBase users token>
+```
+
+```json
+{
+  "invited": 11,
+  "emailed": 11,
   "errors": ["someone@example.com: ..."]
 }
 ```
 
-Re-sends are allowed. Existing response rows are kept; new tokens are generated.
+Re-sends keep existing response rows and mint new tokens. `email_template` must be set or send returns an error.
 
-### Email template params
+---
 
-`email_templates` HTML/subject can use Brevo `{{params.*}}`:
+## Pages
 
-- `{{params.first_name}}`
-- `{{params.last_name}}`
-- `{{params.rsvp_url}}` — tokenized link
-- `{{params.title}}`
-- `{{params.slug}}`
+| File | When |
+|---|---|
+| `rsvp/html/login.html` | Anonymous GET, or failed/required login |
+| `rsvp/html/form.html` | Invited member: `message` HTML + Accept/Decline (+ guests/note if those fields exist) |
+| `rsvp/html/confirmation.html` | After a successful submit |
+| `rsvp/html/not_invited.html` | Authenticated member who failed invite rules |
+| `rsvp/html/error.html` | Missing event or bad/expired token |
 
-Include a button or link to `{{params.rsvp_url}}`. Members without the email can still use `/rsvp/{slug}` and log in.
+---
 
-## Checklist
+## Environment
 
-1. Run migrations so `rsvp` fields and `rsvp_responses` exist.
-2. Create or pick an `email_templates` record with `{{params.rsvp_url}}`.
-3. Create the RSVP with a unique slug and attach that template.
-4. Set `groups` and/or `members` if the event is not for everyone eligible.
-5. `POST /rsvp/{slug}/send`.
-6. Confirm `sent_at` and `rsvp_responses` rows in the dashboard.
+| Variable | Role |
+|---|---|
+| `appurl` | Public origin for email links (no trailing slash needed). |
+| `is_prod` | `true` loads HTML from `/pb/rsvphtml/`; otherwise `rsvp/html/`. Cookie Secure when prod or TLS. |
+| `SENDER_NAME`, `SENDER_EMAIL`, `REPLY_NAME`, `REPLY_EMAIL`, `BREVO_API_KEY` | Same Brevo path as Zoom/invoice mail. |
+
+---
+
+## Migrations
+
+| File | What it does |
+|---|---|
+| `migrations/1788550000_rsvp.go` | Adds missing `rsvp` fields (`slug`, `members`, `groups`, `invite_active_only`, `email_template`, `sent_at`, `open`, `not_invited_message`). Backfills unique slugs on existing rows, then creates `idx_rsvp_slug`. |
+| `migrations/1788551000_rsvp_response.go` | Deletes `rsvp_responses` if present. Ensures `rsvp_response` has event/member relations, a decision field, `guests`, `note`, and unique index. |
+
+---
+
+## Operator checklist
+
+1. Apply migrations (including slug backfill and `rsvp_response` patch).
+2. Create/select an `email_templates` row that links to `{{params.rsvp_url}}`.
+3. Create or edit the `rsvp` record:
+   - unique `slug`
+   - `title` and `message`
+   - `not_invited_message`
+   - `members` / `members_only` and/or `groups`
+   - uncheck `invite_active_only` after save if expired members should be included
+   - `expiration` deadline if needed
+   - attach `email_template`
+4. Confirm your own member id is in `members` if you need to test the form.
+5. `POST /rsvp/{slug}/send` as a `users` auth token.
+6. In the dashboard: `sent_at` set, one `rsvp_response` row per invited member.
+7. Open `/rsvp/{slug}` as a listed member → Accept/Decline. As anyone else → not-invited page.
+
+---
+
+## Related files
+
+- `rsvp/routes.go` — HTTP
+- `rsvp/members.go` — invite + open/deadline
+- `rsvp/send.go` — email
+- `rsvp/response.go` — `rsvp_response` field mapping
+- `rsvp/hooks.go` — create defaults
+- `rsvp/html/` — pages
+- `main.go` — `rsvp.RegisterHooks` + `rsvp.Routes`
+- `Dockerfile` — copies HTML to `/pb/rsvphtml/`

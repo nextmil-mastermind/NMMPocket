@@ -9,7 +9,6 @@ import (
 
 	"nmmpocket/lib"
 
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
 )
@@ -40,7 +39,7 @@ func SendEmails(app core.App, event *core.Record) (*SendResult, error) {
 		return result, nil
 	}
 
-	responses, err := app.FindCollectionByNameOrId("rsvp_responses")
+	schema, err := loadResponseSchema(app)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +55,7 @@ func SendEmails(app core.App, event *core.Record) (*SendResult, error) {
 
 	var tos []lib.Recipient
 	for _, member := range members {
-		if err := upsertPendingResponse(app, responses, event.Id, member.Id); err != nil {
+		if err := upsertPendingResponse(app, schema, event.Id, member.Id); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", member.GetString("email"), err))
 			continue
 		}
@@ -106,18 +105,16 @@ func SendEmails(app core.App, event *core.Record) (*SendResult, error) {
 	return result, nil
 }
 
-func upsertPendingResponse(app core.App, collection *core.Collection, rsvpID, memberID string) error {
-	existing, err := app.FindFirstRecordByFilter(
-		"rsvp_responses",
-		"rsvp = {:rsvp} && member = {:member}",
-		dbx.Params{"rsvp": rsvpID, "member": memberID},
-	)
+func upsertPendingResponse(app core.App, schema *responseSchema, rsvpID, memberID string) error {
+	existing, err := schema.find(app, rsvpID, memberID)
 	if err == nil && existing != nil {
 		return nil
 	}
-	record := core.NewRecord(collection)
-	record.Set("rsvp", rsvpID)
-	record.Set("member", memberID)
-	record.Set("guests", 0)
+	record := core.NewRecord(schema.Collection)
+	record.Set(schema.RSVPField, rsvpID)
+	record.Set(schema.MemberField, memberID)
+	if schema.GuestsField != "" {
+		record.Set(schema.GuestsField, 0)
+	}
 	return app.Save(record)
 }

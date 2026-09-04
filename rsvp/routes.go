@@ -128,16 +128,22 @@ func handleSubmit(e *core.RequestEvent) error {
 	if !IsMemberInvited(event, e.Auth) {
 		return renderNotInvited(e, event)
 	}
-	if !event.GetBool("open") {
+	if !eventIsOpen(event) {
 		return renderMemberView(e, event, e.Auth, "This RSVP is closed.")
 	}
 
 	if err := e.Request.ParseForm(); err != nil {
 		return renderMemberView(e, event, e.Auth, "Invalid request.")
 	}
-	status := e.Request.FormValue("status")
-	if status != "yes" && status != "no" && status != "maybe" {
-		return renderMemberView(e, event, e.Auth, "Please choose yes, no, or maybe.")
+	status := strings.ToLower(strings.TrimSpace(e.Request.FormValue("status")))
+	if status == "yes" {
+		status = "accept"
+	}
+	if status == "no" {
+		status = "decline"
+	}
+	if status != "accept" && status != "decline" {
+		return renderMemberView(e, event, e.Auth, "Please choose Accept or Decline.")
 	}
 	guests, _ := strconv.Atoi(e.Request.FormValue("guests"))
 	if guests < 0 {
@@ -145,32 +151,34 @@ func handleSubmit(e *core.RequestEvent) error {
 	}
 	note := strings.TrimSpace(e.Request.FormValue("note"))
 
-	collection, err := e.App.FindCollectionByNameOrId("rsvp_responses")
+	schema, err := loadResponseSchema(e.App)
 	if err != nil {
 		return renderMemberView(e, event, e.Auth, "Unable to save your RSVP.")
 	}
-	record, err := e.App.FindFirstRecordByFilter(
-		"rsvp_responses",
-		"rsvp = {:rsvp} && member = {:member}",
-		dbx.Params{"rsvp": event.Id, "member": e.Auth.Id},
-	)
+	record, err := schema.find(e.App, event.Id, e.Auth.Id)
 	if err != nil {
-		record = core.NewRecord(collection)
-		record.Set("rsvp", event.Id)
-		record.Set("member", e.Auth.Id)
+		record = core.NewRecord(schema.Collection)
+		record.Set(schema.RSVPField, event.Id)
+		record.Set(schema.MemberField, e.Auth.Id)
 	}
-	record.Set("status", status)
-	record.Set("guests", guests)
-	record.Set("note", note)
+	schema.setStatus(record, status == "accept")
+	if schema.GuestsField != "" {
+		record.Set(schema.GuestsField, guests)
+	}
+	if schema.NoteField != "" {
+		record.Set(schema.NoteField, note)
+	}
 	if err := e.App.Save(record); err != nil {
 		return renderMemberView(e, event, e.Auth, "Unable to save your RSVP.")
 	}
 	return renderPage(e, http.StatusOK, "confirmation.html", map[string]any{
-		"title":  rsvpTitle(event),
-		"slug":   event.GetString("slug"),
-		"status": status,
-		"guests": guests,
-		"note":   note,
+		"title":       rsvpTitle(event),
+		"slug":        event.GetString("slug"),
+		"status":      status,
+		"statusLabel": statusLabel(status),
+		"guests":      guests,
+		"note":        note,
+		"hasGuests":   schema.GuestsField != "",
 	})
 }
 
@@ -179,30 +187,55 @@ func renderMemberView(e *core.RequestEvent, event, member *core.Record, formErro
 		return renderNotInvited(e, event)
 	}
 
-	existing, _ := e.App.FindFirstRecordByFilter(
-		"rsvp_responses",
-		"rsvp = {:rsvp} && member = {:member}",
-		dbx.Params{"rsvp": event.Id, "member": member.Id},
-	)
-	status := ""
+	schema, err := loadResponseSchema(e.App)
+	if err != nil {
+		return renderPage(e, http.StatusInternalServerError, "error.html", map[string]any{
+			"title":   rsvpTitle(event),
+			"message": "Unable to load this RSVP.",
+		})
+	}
+	existing, _ := schema.find(e.App, event.Id, member.Id)
+	status := schema.readStatus(existing)
 	guests := 0
 	note := ""
 	if existing != nil {
-		status = existing.GetString("status")
-		guests = existing.GetInt("guests")
-		note = existing.GetString("note")
+		if schema.GuestsField != "" {
+			guests = existing.GetInt(schema.GuestsField)
+		}
+		if schema.NoteField != "" {
+			note = existing.GetString(schema.NoteField)
+		}
+	}
+
+	msg := strings.TrimSpace(event.GetString("message"))
+	var body any
+	if msg != "" {
+		body = template.HTML(msg)
 	}
 
 	return renderPage(e, http.StatusOK, "form.html", map[string]any{
 		"title":     rsvpTitle(event),
 		"slug":      event.GetString("slug"),
 		"firstName": member.GetString("first_name"),
-		"open":      event.GetBool("open"),
+		"open":      eventIsOpen(event),
+		"message":   body,
 		"status":    status,
 		"guests":    guests,
 		"note":      note,
+		"hasGuests": schema.GuestsField != "",
+		"hasNote":   schema.NoteField != "",
 		"error":     formError,
 	})
+}
+
+func statusLabel(status string) string {
+	if status == "accept" {
+		return "Accepted"
+	}
+	if status == "decline" {
+		return "Declined"
+	}
+	return status
 }
 
 func renderNotInvited(e *core.RequestEvent, event *core.Record) error {

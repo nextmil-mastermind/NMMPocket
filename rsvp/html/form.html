@@ -6,50 +6,59 @@
     <title>RSVP - {{.title}}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
-        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; }
-        .card { background-color: white; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); width: 100%; max-width: 480px; margin: 1rem; }
+        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #f5f5f5; padding: 1rem; }
+        .card { background-color: white; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); width: 100%; max-width: 720px; }
         .header { text-align: center; margin-bottom: 1.5rem; }
         .header h1 { color: #333; font-size: 1.6rem; margin-bottom: 0.4rem; }
         .header p { color: #666; }
+        .message { color: #333; line-height: 1.55; margin-bottom: 1.5rem; }
+        .message p { margin-bottom: 0.75rem; }
+        .message h3 { margin: 0.75rem 0; }
+        .message hr { border: none; border-top: 1px solid #eee; margin: 1rem 0; }
         .form-group { margin-bottom: 1.25rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; color: #555; font-size: 0.9rem; }
-        .choices { display: flex; gap: 0.75rem; }
-        .choices label { display: flex; align-items: center; gap: 0.4rem; padding: 0.6rem 0.8rem; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; flex: 1; justify-content: center; }
+        .actions { display: flex; gap: 0.75rem; }
+        .button { flex: 1; padding: 0.85rem; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; }
+        .button.accept { background-color: #198754; }
+        .button.accept:hover { background-color: #146c43; }
+        .button.decline { background-color: #6c757d; }
+        .button.decline:hover { background-color: #5c636a; }
+        .button:disabled { background-color: #ccc; cursor: not-allowed; }
         input[type="number"], textarea { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem; }
         textarea { min-height: 90px; resize: vertical; }
-        .button { width: 100%; padding: 0.75rem; background-color: #007bff; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; }
-        .button:hover { background-color: #0056b3; }
-        .button:disabled { background-color: #ccc; cursor: not-allowed; }
         .error { color: #dc3545; font-size: 0.9rem; margin-bottom: 1rem; text-align: center; }
         .notice { background: #fff3cd; color: #856404; padding: 0.75rem; border-radius: 5px; margin-bottom: 1rem; text-align: center; }
+        .current { text-align: center; margin-bottom: 1rem; color: #198754; font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="card">
         <div class="header">
             <h1>{{.title}}</h1>
-            <p>Hi {{.firstName}}, please let us know if you can attend.</p>
+            {{if .firstName}}<p>Hi {{.firstName}}</p>{{end}}
         </div>
+        {{if .message}}<div class="message">{{.message}}</div>{{end}}
         {{if not .open}}<div class="notice">This RSVP is closed. You can view your response but cannot change it.</div>{{end}}
         {{if .error}}<div class="error">{{.error}}</div>{{end}}
+        {{if eq .status "accept"}}<div class="current">Your current response: Accepted</div>{{end}}
+        {{if eq .status "decline"}}<div class="current">Your current response: Declined</div>{{end}}
         <form method="POST" action="/rsvp/{{.slug}}">
-            <div class="form-group">
-                <label>Will you attend?</label>
-                <div class="choices">
-                    <label><input type="radio" name="status" value="yes" {{if eq .status "yes"}}checked{{end}} {{if not .open}}disabled{{end}} required> Yes</label>
-                    <label><input type="radio" name="status" value="no" {{if eq .status "no"}}checked{{end}} {{if not .open}}disabled{{end}}> No</label>
-                    <label><input type="radio" name="status" value="maybe" {{if eq .status "maybe"}}checked{{end}} {{if not .open}}disabled{{end}}> Maybe</label>
-                </div>
-            </div>
+            {{if .hasGuests}}
             <div class="form-group">
                 <label for="guests">Additional guests</label>
                 <input type="number" id="guests" name="guests" min="0" value="{{.guests}}" {{if not .open}}disabled{{end}}>
             </div>
+            {{end}}
+            {{if .hasNote}}
             <div class="form-group">
                 <label for="note">Note (optional)</label>
                 <textarea id="note" name="note" {{if not .open}}disabled{{end}}>{{.note}}</textarea>
             </div>
-            <button type="submit" class="button" {{if not .open}}disabled{{end}}>Submit RSVP</button>
+            {{end}}
+            <div class="actions">
+                <button type="submit" name="status" value="accept" class="button accept" {{if not .open}}disabled{{end}}>Accept</button>
+                <button type="submit" name="status" value="decline" class="button decline" {{if not .open}}disabled{{end}}>Decline</button>
+            </div>
         </form>
     </div>
 </body>
