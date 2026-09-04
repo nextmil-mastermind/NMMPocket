@@ -136,7 +136,7 @@ Used for login, invite checks, and email recipients.
 | Field | How RSVP uses it |
 |---|---|
 | `id` | Must match an ID in `rsvp.members` when that list is non-empty. |
-| `email` | Login, Brevo `to`, token identity. `info@nextmilmastermind.com` is always excluded. |
+| `email` | Login, Brevo `to`, token identity. |
 | `username` | Alternate login if email lookup fails. |
 | `password` | `POST /rsvp/{slug}/login`. |
 | `first_name`, `last_name` | Email params and greeting. |
@@ -176,12 +176,13 @@ Put a button/link on `{{params.rsvp_url}}`. Members can also open `/rsvp/{slug}`
 
 Rules apply in order. Fail any one → not invited.
 
-1. Email is not `info@nextmilmastermind.com`.
-2. If `invite_active_only`: keep only active members (`expiration` in the future **or** `group = founder`).
-3. If `groups` has values: member `group` must be in that list.
-4. If `members` has anyone: only those IDs. If `members` is empty and `members_only` is true: any remaining member. If `members` is empty and `members_only` is false: nobody.
+1. If `invite_active_only`: keep only active members (`expiration` in the future **or** `group = founder`).
+2. If `groups` has values: member `group` must be in that list.
+3. If `members` has anyone: only those IDs. If `members` is empty and `members_only` is true: any remaining member. If `members` is empty and `members_only` is false: nobody.
 
-`invite_active_only` narrows whatever set step 4 produced (all members, or the explicit list).
+`invite_active_only` narrows whatever set step 3 produced (all members, or the explicit list).
+
+`info@nextmilmastermind.com` is **not** excluded from RSVP. Zoom registration still skips that address.
 
 Member IDs are collected from `GetStringSlice("members")` and from `ExpandedAll("members")`.
 
@@ -189,7 +190,7 @@ Member IDs are collected from `GetStringSlice("members")` and from `ExpandedAll(
 
 | `members_only` | `members` list | `invite_active_only` | Who can RSVP / get email |
 |---|---|---|---|
-| true | empty | false | Every member (except info@) |
+| true | empty | false | Every member |
 | true | empty | true | Every **active** member (or founder) |
 | true | has IDs | false | Only those IDs |
 | true | has IDs | true | Only those IDs who are active (or founder) |

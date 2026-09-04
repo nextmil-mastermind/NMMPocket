@@ -31,9 +31,6 @@ func FindBySlug(app core.App, slug string) (*core.Record, error) {
 }
 
 func IsMemberInvited(event, member *core.Record) bool {
-	if member.GetString("email") == infoEmail {
-		return false
-	}
 	if event.GetBool("invite_active_only") {
 		exp := memberExpiration(member)
 		if !exp.After(time.Now()) && member.GetString("group") != founderGroup {
@@ -106,9 +103,6 @@ func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
 	var parts []string
 	params := dbx.Params{}
 
-	parts = append(parts, "email != {:infoEmail}")
-	params["infoEmail"] = infoEmail
-
 	if event.GetBool("invite_active_only") {
 		parts = append(parts, "(expiration > @now || group = {:founder})")
 		params["founder"] = founderGroup
@@ -129,6 +123,9 @@ func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
 	}
 
 	filter := strings.Join(parts, " && ")
+	if filter == "" {
+		filter = "id != ''"
+	}
 	records, err := app.FindRecordsByFilter("members", filter, "-expiration", 0, 0, params)
 	if err != nil {
 		return nil, fmt.Errorf("resolve invited members: %w", err)
