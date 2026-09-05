@@ -18,10 +18,20 @@ func Routes(r *router.Router[*core.RequestEvent]) {
 	g := r.Group("/rsvp")
 	g.BindFunc(loadCookieAuth)
 
+	g.GET("/theme.css", handleThemeCSS)
 	g.POST("/{slug}/send", handleSend).Bind(apis.RequireAuth())
 	g.GET("/{slug}", handleGet)
 	g.POST("/{slug}/login", handleLogin)
 	g.POST("/{slug}", handleSubmit)
+}
+
+func handleThemeCSS(e *core.RequestEvent) error {
+	data, err := os.ReadFile(templatePath("theme.css"))
+	if err != nil {
+		return apis.NewNotFoundError("Stylesheet not found.", err)
+	}
+	e.Response.Header().Set("Cache-Control", "public, max-age=3600")
+	return e.Blob(http.StatusOK, "text/css; charset=utf-8", data)
 }
 
 func loadCookieAuth(e *core.RequestEvent) error {

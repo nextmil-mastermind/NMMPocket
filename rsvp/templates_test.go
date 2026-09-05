@@ -1,6 +1,7 @@
 package rsvp
 
 import (
+	"strings"
 	"testing"
 
 	pbtemplate "github.com/pocketbase/pocketbase/tools/template"
@@ -29,6 +30,9 @@ func TestTemplatesRender(t *testing.T) {
 		}
 		if html == "" {
 			t.Fatalf("%s rendered empty", name)
+		}
+		if !strings.Contains(html, "/rsvp/theme.css") {
+			t.Fatalf("%s missing theme stylesheet", name)
 		}
 	}
 }

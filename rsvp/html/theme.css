@@ -1,0 +1,320 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+
+:root {
+    --nmm-background: #05060a;
+    --nmm-surface: #0d1019;
+    --nmm-surface-muted: rgba(13, 16, 25, 0.85);
+    --nmm-text: #e6e8ef;
+    --nmm-text-muted: rgba(230, 232, 239, 0.7);
+    --nmm-accent: #f6d16d;
+    --nmm-accent-hover: #ffe6a6;
+    --nmm-accent-soft: hsla(44, 88%, 70%, 0.18);
+    --nmm-border: hsla(0, 0%, 100%, 0.08);
+    --nmm-radius: 24px;
+    --nmm-cta-text: #0a0b0f;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+    background-color: var(--nmm-background);
+    color: var(--nmm-text);
+    font-family: Poppins, Inter, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.01em;
+    line-height: 1.6;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    background:
+        radial-gradient(ellipse at top, hsla(44, 88%, 70%, 0.08), transparent 42%),
+        linear-gradient(180deg, #080a10 0%, var(--nmm-background) 55%);
+}
+
+a {
+    color: var(--nmm-accent);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--nmm-accent-hover);
+}
+
+.card {
+    background: var(--nmm-surface);
+    border: 1px solid var(--nmm-border);
+    border-radius: var(--nmm-radius);
+    box-shadow: 0 24px 48px rgba(3, 4, 8, 0.45);
+    width: 100%;
+    max-width: 440px;
+    padding: 2.25rem 2rem;
+}
+
+.card.wide {
+    max-width: 720px;
+}
+
+.card.center {
+    text-align: center;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    margin-bottom: 1.5rem;
+}
+
+.brand-mark {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.35));
+}
+
+.brand-wordmark {
+    color: #f5f6f8;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.header h1,
+.card > h1 {
+    color: var(--nmm-text);
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    margin-bottom: 0.5rem;
+}
+
+.header p,
+.lede {
+    color: var(--nmm-text-muted);
+    font-size: 0.95rem;
+}
+
+.eyebrow {
+    color: hsla(44, 88%, 70%, 0.65);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+}
+
+.message {
+    color: var(--nmm-text);
+    margin-bottom: 1.5rem;
+}
+
+.message p,
+.card > p {
+    color: var(--nmm-text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.message h1,
+.message h2,
+.message h3,
+.message h4 {
+    color: var(--nmm-text);
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0.9rem 0 0.5rem;
+}
+
+.message a {
+    color: var(--nmm-accent);
+}
+
+.message hr {
+    border: none;
+    border-top: 1px solid var(--nmm-border);
+    margin: 1.1rem 0;
+}
+
+.message ul,
+.message ol {
+    margin: 0 0 0.75rem 1.2rem;
+    color: var(--nmm-text-muted);
+}
+
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--nmm-text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.form-group input,
+.form-group textarea,
+input[type="number"],
+input[type="text"],
+input[type="password"],
+input[type="email"],
+textarea {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--nmm-border);
+    border-radius: 12px;
+    background: rgba(5, 6, 10, 0.65);
+    color: var(--nmm-text);
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+input:focus,
+textarea:focus {
+    outline: none;
+    border-color: hsla(44, 88%, 70%, 0.45);
+    box-shadow: 0 0 0 3px var(--nmm-accent-soft);
+}
+
+textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.button,
+.cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.85rem 1.4rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #d6a64b, #fce6a0);
+    box-shadow: 0 12px 20px #f6d26f47;
+    color: var(--nmm-cta-text);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.button:hover,
+.cta:hover {
+    color: var(--nmm-cta-text);
+    text-decoration: none;
+    box-shadow: 0 14px 26px #f6d26f4d;
+    transform: translateY(-1px);
+}
+
+.button.decline {
+    background: transparent;
+    box-shadow: none;
+    border: 1.5px solid hsla(44, 88%, 70%, 0.35);
+    color: var(--nmm-accent);
+}
+
+.button.decline:hover {
+    background: var(--nmm-accent-soft);
+    box-shadow: none;
+    color: var(--nmm-accent-hover);
+}
+
+.button:disabled,
+.button:disabled:hover {
+    background: #2a2d38;
+    border-color: transparent;
+    box-shadow: none;
+    color: rgba(230, 232, 239, 0.35);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.actions .button {
+    flex: 1;
+}
+
+.error {
+    color: #ff8a80;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.notice {
+    background: var(--nmm-accent-soft);
+    color: var(--nmm-accent);
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.current,
+.status {
+    text-align: center;
+    margin: 1rem 0;
+    color: var(--nmm-accent);
+    font-weight: 600;
+}
+
+.current.declined,
+.status.declined {
+    color: var(--nmm-text-muted);
+}
+
+.link-cta {
+    display: inline-flex;
+    margin-top: 1.25rem;
+    width: auto;
+    padding: 0.7rem 1.4rem;
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 1rem 0.75rem;
+    }
+
+    .card {
+        padding: 1.6rem 1.2rem;
+    }
+
+    .brand-wordmark {
+        font-size: 0.68rem;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+}
