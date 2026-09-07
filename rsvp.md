@@ -56,7 +56,7 @@ PocketBase also has system fields: `id`, `created`, `updated`, `collectionId`, `
 | `expiration` | date | no | **Event** RSVP deadline. After this time invited members can view but not submit. Not the same as member membership expiration. |
 | `open` | bool | no | Forced **true** on create. If false, form is view-only. |
 | `allow_guests` | bool | no | If true, the form shows Additional guests. Off by default. |
-| `email_template` | relation → `email_templates` | required to send | Subject + HTML for Brevo. |
+| `email_template` | relation → `email_basic` | required to send | Subject + HTML for Brevo. |
 | `sent_at` | date | no | Set automatically after a successful send. |
 
 On create, a hook always sets `invite_active_only = true` and `open = true`. Uncheck them after the first save if you want the opposite.
@@ -92,7 +92,7 @@ These can stay on the record; the current routes ignore them.
 }
 ```
 
-With this shape: `members` is populated, so only those IDs can Accept/Decline. Clear `members` and leave `members_only` true to let every member register (then turn on `invite_active_only` to keep only active ones). After `2026-09-11 22:00:00Z` the form stays visible for invited members but submit is disabled. Send will fail until `email_template` is set.
+With this shape: `members` is populated, so only those IDs can Accept/Decline. Clear `members` and leave `members_only` true to let every member register (then turn on `invite_active_only` to keep only active ones). After `2026-09-11 22:00:00Z` the form stays visible for invited members but submit is disabled. Send will fail until `email_template` points at an `email_basic` row.
 
 ---
 
@@ -149,9 +149,9 @@ Auth tokens are PocketBase member auth tokens (`NewAuthToken` / `FindAuthRecordB
 
 ---
 
-### `email_templates`
+### `email_basic`
 
-Relation target of `rsvp.email_template`.
+Relation target of `rsvp.email_template`. Same collection invoices use.
 
 | Field | Use |
 |---|---|
@@ -242,7 +242,7 @@ Authorization: <PocketBase users token>
 }
 ```
 
-Re-sends keep existing response rows and mint new tokens. `email_template` must be set or send returns an error.
+Re-sends keep existing response rows and mint new tokens. `email_template` must point at an `email_basic` row or send returns an error.
 
 ---
 
@@ -275,13 +275,14 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
 | `migrations/1788550000_rsvp.go` | Adds missing `rsvp` fields (`slug`, `members`, `groups`, `invite_active_only`, `email_template`, `sent_at`, `open`, `not_invited_message`, `allow_guests`). Backfills unique slugs on existing rows, then creates `idx_rsvp_slug`. |
 | `migrations/1788551000_rsvp_response.go` | Deletes `rsvp_responses` if present. Ensures `rsvp_response` has event/member relations, a decision field, `guests`, `note`, and unique index. |
 | `migrations/1788552000_rsvp_allow_guests.go` | Adds `allow_guests` on existing `rsvp` collections. |
+| `migrations/1788553000_rsvp_email_basic.go` | Points `rsvp.email_template` at `email_basic`. Clears leftover IDs that are not in that collection. |
 
 ---
 
 ## Operator checklist
 
 1. Apply migrations (including slug backfill and `rsvp_response` patch).
-2. Create/select an `email_templates` row that links to `{{params.rsvp_url}}`.
+2. Create/select an `email_basic` row that links to `{{params.rsvp_url}}`.
 3. Create or edit the `rsvp` record:
    - unique `slug`
    - `title` and `message`

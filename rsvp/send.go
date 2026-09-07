@@ -26,7 +26,7 @@ func SendEmails(app core.App, event *core.Record) (*SendResult, error) {
 	}
 	emailRecord := event.ExpandedOne("email_template")
 	if emailRecord == nil {
-		return nil, fmt.Errorf("rsvp %q has no email_template", event.GetString("slug"))
+		return nil, fmt.Errorf("rsvp %q has no email_basic template", event.GetString("slug"))
 	}
 
 	members, err := ResolveMembers(app, event)

@@ -14,7 +14,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		emailTemplates, err := app.FindCollectionByNameOrId("email_templates")
+		emailBasic, err := app.FindCollectionByNameOrId("email_basic")
 		if err != nil {
 			return err
 		}
@@ -58,9 +58,9 @@ func init() {
 		})
 		addFieldIfMissing(rsvp, &core.RelationField{
 			Name:         "email_template",
-			CollectionId: emailTemplates.Id,
+			CollectionId: emailBasic.Id,
 			MaxSelect:    1,
-			Help:         "Template used when sending RSVP emails.",
+			Help:         "email_basic template used when sending RSVP emails. Include {{params.rsvp_url}}.",
 		})
 		addFieldIfMissing(rsvp, &core.DateField{
 			Name: "sent_at",
