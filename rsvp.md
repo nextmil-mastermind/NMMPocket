@@ -275,7 +275,7 @@ Re-sends keep existing response rows and mint new tokens. `email_template` must 
 | `migrations/1788550000_rsvp.go` | Adds missing `rsvp` fields (`slug`, `members`, `groups`, `invite_active_only`, `email_template`, `sent_at`, `open`, `not_invited_message`, `allow_guests`). Backfills unique slugs on existing rows, then creates `idx_rsvp_slug`. |
 | `migrations/1788551000_rsvp_response.go` | Deletes `rsvp_responses` if present. Ensures `rsvp_response` has event/member relations, a decision field, `guests`, `note`, and unique index. |
 | `migrations/1788552000_rsvp_allow_guests.go` | Adds `allow_guests` on existing `rsvp` collections. |
-| `migrations/1788553000_rsvp_email_basic.go` | Points `rsvp.email_template` at `email_basic`. Clears leftover IDs that are not in that collection. |
+| `migrations/1788553000_rsvp_email_basic.go` | Recreates `rsvp.email_template` as a relation to `email_basic` (PocketBase cannot retarget a relation in place). |
 
 ---
 

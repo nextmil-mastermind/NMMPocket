@@ -11,58 +11,42 @@ func init() {
 		if err != nil {
 			return err
 		}
-		rsvp, err := app.FindCollectionByNameOrId("rsvp")
-		if err != nil {
-			return err
-		}
-
-		if f, ok := rsvp.Fields.GetByName("email_template").(*core.RelationField); ok {
-			f.CollectionId = emailBasic.Id
-			f.MaxSelect = 1
-			f.Help = "email_basic template used when sending RSVP emails. Include {{params.rsvp_url}}."
-		} else {
-			addFieldIfMissing(rsvp, &core.RelationField{
-				Name:         "email_template",
-				CollectionId: emailBasic.Id,
-				MaxSelect:    1,
-				Help:         "email_basic template used when sending RSVP emails. Include {{params.rsvp_url}}.",
-			})
-		}
-		if err := app.Save(rsvp); err != nil {
-			return err
-		}
-
-		records, err := app.FindAllRecords("rsvp")
-		if err != nil {
-			return err
-		}
-		for _, record := range records {
-			id := record.GetString("email_template")
-			if id == "" {
-				continue
-			}
-			if _, err := app.FindRecordById("email_basic", id); err == nil {
-				continue
-			}
-			record.Set("email_template", "")
-			if err := app.Save(record); err != nil {
-				return err
-			}
-		}
-		return nil
+		return replaceEmailTemplateRelation(app, emailBasic.Id)
 	}, func(app core.App) error {
 		emailTemplates, err := app.FindCollectionByNameOrId("email_templates")
 		if err != nil {
 			return nil
 		}
-		rsvp, err := app.FindCollectionByNameOrId("rsvp")
-		if err != nil {
+		return replaceEmailTemplateRelation(app, emailTemplates.Id)
+	})
+}
+
+func replaceEmailTemplateRelation(app core.App, collectionID string) error {
+	rsvp, err := app.FindCollectionByNameOrId("rsvp")
+	if err != nil {
+		return err
+	}
+
+	help := "email_basic template used when sending RSVP emails. Include {{params.rsvp_url}}."
+	if f, ok := rsvp.Fields.GetByName("email_template").(*core.RelationField); ok {
+		if f.CollectionId == collectionID {
 			return nil
 		}
-		if f, ok := rsvp.Fields.GetByName("email_template").(*core.RelationField); ok {
-			f.CollectionId = emailTemplates.Id
-			return app.Save(rsvp)
+		rsvp.Fields.RemoveById(f.GetId())
+		if err := app.Save(rsvp); err != nil {
+			return err
 		}
-		return nil
+		rsvp, err = app.FindCollectionByNameOrId("rsvp")
+		if err != nil {
+			return err
+		}
+	}
+
+	addFieldIfMissing(rsvp, &core.RelationField{
+		Name:         "email_template",
+		CollectionId: collectionID,
+		MaxSelect:    1,
+		Help:         help,
 	})
+	return app.Save(rsvp)
 }
