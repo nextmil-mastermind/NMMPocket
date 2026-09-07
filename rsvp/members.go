@@ -85,6 +85,21 @@ func eventMemberIDs(event *core.Record) []string {
 	for _, id := range event.GetStringSlice("members") {
 		add(id)
 	}
+	switch raw := event.Get("members").(type) {
+	case []string:
+		for _, id := range raw {
+			add(id)
+		}
+	case []any:
+		for _, item := range raw {
+			switch v := item.(type) {
+			case string:
+				add(v)
+			case *core.Record:
+				add(v.Id)
+			}
+		}
+	}
 	for _, rec := range event.ExpandedAll("members") {
 		add(rec.Id)
 	}
@@ -104,35 +119,29 @@ func nonzeroStrings(values []string) []string {
 func ResolveMembers(app core.App, event *core.Record) ([]*core.Record, error) {
 	_ = app.ExpandRecord(event, []string{"members"}, nil)
 
-	var parts []string
-	params := dbx.Params{}
-
-	if event.GetBool("invite_active_only") {
-		parts = append(parts, "(expiration > @now || group = {:founder})")
-		params["founder"] = founderGroup
-	}
-
-	groups := nonzeroStrings(event.GetStringSlice("groups"))
-	if len(groups) > 0 {
-		parts = append(parts, "group ?= {:groups}")
-		params["groups"] = groups
-	}
-
 	ids := eventMemberIDs(event)
+	var records []*core.Record
 	if len(ids) > 0 {
-		parts = append(parts, "id ?= {:ids}")
-		params["ids"] = ids
-	} else if !event.GetBool("members_only") {
+		found, err := app.FindRecordsByIds("members", ids)
+		if err != nil {
+			return nil, fmt.Errorf("resolve invited members: %w", err)
+		}
+		records = found
+	} else if event.GetBool("members_only") {
+		found, err := app.FindRecordsByFilter("members", "id != ''", "-expiration", 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("resolve invited members: %w", err)
+		}
+		records = found
+	} else {
 		return nil, nil
 	}
 
-	filter := strings.Join(parts, " && ")
-	if filter == "" {
-		filter = "id != ''"
+	out := make([]*core.Record, 0, len(records))
+	for _, member := range records {
+		if IsMemberInvited(event, member) {
+			out = append(out, member)
+		}
 	}
-	records, err := app.FindRecordsByFilter("members", filter, "-expiration", 0, 0, params)
-	if err != nil {
-		return nil, fmt.Errorf("resolve invited members: %w", err)
-	}
-	return records, nil
+	return out, nil
 }

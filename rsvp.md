@@ -242,7 +242,7 @@ Authorization: <PocketBase users token>
 }
 ```
 
-Re-sends keep existing response rows and mint new tokens. `email_template` must point at an `email_basic` row or send returns an error.
+Re-sends keep existing response rows and mint new tokens. `email_template` must point at an `email_basic` row or send returns an error. Send also errors if nobody is invited (`members` empty and `members_only` false, or every listed member failed the other filters).
 
 ---
 

@@ -36,7 +36,7 @@ func SendEmails(app core.App, event *core.Record) (*SendResult, error) {
 
 	result := &SendResult{Invited: len(members)}
 	if len(members) == 0 {
-		return result, nil
+		return result, fmt.Errorf("no invited members for %q; set members or turn on members_only", event.GetString("slug"))
 	}
 
 	schema, err := loadResponseSchema(app)
